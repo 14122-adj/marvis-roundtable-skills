@@ -197,6 +197,9 @@ revision:
   remaining_doubt: 修正后仍不确定的地方
 ```
 
+`trigger` 的引用对象：claim id（如 `M1-1`）或元认知条目 `H`/`D`/`G`/`F`/`C` 编号。
+`position-evolution/scripts/revision_tracker.py` 接受这五类编号，其中 `H`/`G` 是最常见的形式。
+
 ---
 
 ## 4. 元认知报告契约（Layer 2）
