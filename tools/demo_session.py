@@ -296,6 +296,32 @@ def main() -> int:
     text = run([py, sm, "summary", "--state", state], args.quiet)
     print(text if args.quiet else "")
 
+    # ---------------- P2 · 决策景观 ----------------
+    print("\n=== 6. P2 决策景观报告 ===")
+    dl = ROOT / "skills" / "decision-landscape" / "scripts" / "synthesis_generator.py"
+    report_path = out / "decision-landscape.md"
+    run([py, str(dl), "build", "--state", state, "--out", str(report_path)], args.quiet)
+    run([py, str(dl), "check", "--state", state], args.quiet)
+    print(f"决策景观报告已生成：{report_path}")
+
+    # ---------------- P3 · 认知噪声（rigorous 模式应被脚本拒绝） ----------------
+    print("\n=== 7. P3 认知噪声开关检查 ===")
+    cn = ROOT / "skills" / "cognitive-noise" / "scripts" / "noise_injector.py"
+    proc = subprocess.run([py, str(cn), "plan", "--state", state, "--role", "pg"],
+                          capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if proc.returncode == 3 and '"mode_ok": false' in proc.stdout:
+        print("认知噪声在 rigorous 模式下被拒绝（符合预期：该层会降低严谨性，只允许 simulation 模式）")
+    else:
+        print(f"!! 预期被拒绝，实际 returncode={proc.returncode}")
+        return 1
+
+    # ---------------- P4 · 异构基座调用包 ----------------
+    print("\n=== 8. P4 多基座调用包 ===")
+    mm = ROOT / "skills" / "multi-model-adapter" / "scripts" / "runtime_manifest.py"
+    bundle = out / "bundle-round3"
+    run([py, str(mm), "emit", "--state", state, "--round", "3", "--out", str(bundle)], args.quiet)
+    print(f"多基座调用包已生成（每角色一个 task.json，provider/model 未指定时为 unspecified）：{bundle}")
+
     print(f"\n演示完成。状态文件：{state}")
     print("注意：本演示的对话内容为虚构示例数据，不代表真实调研结论。")
     return 0

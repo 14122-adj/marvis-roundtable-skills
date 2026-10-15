@@ -2,6 +2,35 @@
 
 遵循语义化版本。字段与枚举的改动一律同步 `docs/output-contract.md` 并提升契约版本号。
 
+## v1.1.0 — 2026-06-01
+
+路线图 P2–P5 落地：新增 3 个技能、3 个脚本、3 份参考手册、离线评测集与打包器；契约升到 v1.1.0。
+
+**Layer 4 · `decision-landscape`（P2，决策景观）**
+- `synthesis_generator.py`：把讨论状态聚合成分区报告（共识区 / 分歧区 / 隐性假设 / 决策建议 / 信息缺口 / 少数派保护 + 未检验主张附录）
+- 共识强度三档口径（剔除 `compliance_drift` 后的有效支持数）：`unanimous` / `majority` / `weak`
+- `check` 完整性检查：少数派是否被保留、弱共识、≥3 角色漂移时的"假共识"告警、事实分歧是否缺 `G` 缺口
+- 禁止断言护栏：报告出现"已达成共识 / 已验证 / 已挖到根本"等字样时脚本直接报错退出
+
+**Layer 5 · `cognitive-noise`（P3，轻量认知噪声，默认关闭）**
+- `noise_injector.py`：选择性注意（确定性种子 + 必须声明忽略清单）、表达偏好四档、置信度传导
+- **脚本级开关**：`mode=rigorous` 时 `plan` 直接以退出码 3 拒绝（不靠文档纪律）
+- 可控性红线：manifest 只记录 id，出现任何文本即判定"改写原文"违规；`must_respond` 不受注意力筛选影响
+
+**Layer 6 · `multi-model-adapter`（P4，异构基座适配，可选）**
+- `runtime_manifest.py emit`：为每个角色生成独立调用包（含契约摘要、payload schema、隔离要求、调用包哈希）
+- `merge`：按契约校验跨模型结果（8 个固定错误码），可调用 `state_manager.py` 回写状态
+- `unspecified` 纪律：未指定 provider/model 一律写 `unspecified`，禁止编造模型名（仓库自检含此项扫描）
+
+**P5 · 评测与打包**
+- `evals/evals.json` + `tools/run_evals.py`：23 条离线评测（trigger 覆盖率回归护栏 / command 真实执行 / artifact 结构检查），明确不调用模型
+- `tools/package_bundle.py`：打包整包 ZIP 与逐技能 ZIP，打包前校验 frontmatter、name 一致性与跨目录相对引用
+- `tools/demo_session.py` 扩展为 8 步端到端：新增决策景观生成、噪声开关拒绝验证、多基座调用包生成
+
+**工程**
+- `tools/validate_repo.py` 扩到 83 项：新增版本一致性（技能 / CHANGELOG / 契约三方对齐）与"疑似编造真实模型名"扫描
+- 全部 10 个脚本通过 `--selftest`；`.gitignore` 增加 `dist/`
+
 ## v1.0.0 — 2026-06-01
 
 P0 + P1 全量落地。9 个技能、7 个脚本、3 份参考手册、1 份冻结契约。

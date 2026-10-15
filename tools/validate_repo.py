@@ -28,9 +28,16 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 SKILLS = ROOT / "skills"
 
-CORE_SKILLS = ["roundtable-orchestrator", "meta-supervisor", "position-evolution"]
+CORE_SKILLS = ["roundtable-orchestrator", "meta-supervisor", "position-evolution",
+               "decision-landscape", "cognitive-noise", "multi-model-adapter"]
 ROLE_SKILLS = ["role-musk", "role-feynman", "role-munger", "role-jobs", "role-karpathy", "role-pg"]
 ALL_SKILLS = CORE_SKILLS + ROLE_SKILLS
+EXPECTED_VERSION = "1.1.0"
+
+# 不得出现在文档里的真实模型名（本包一律用占位符或 unspecified）
+FABRICATED_MODEL_RE = re.compile(
+    r"\b(?:gpt-[0-9a-z]|claude-[0-9a-z]|gemini-[0-9a-z]|llama-[0-9a-z]|qwen[0-9-]|"
+    r"deepseek-(?:chat|v[0-9]|r[0-9])|mistral-[0-9a-z]|grok-[0-9a-z])", re.I)
 
 ROLE_HEADINGS = [
     "## 角色定位",
@@ -56,6 +63,10 @@ EXPECTED_FILES = {
     "meta-supervisor": ["scripts/assumption_extractor.py", "scripts/divergence_classifier.py",
                         "scripts/fallacy_detector.py", "references/metacognitive-checklist.md"],
     "position-evolution": ["scripts/revision_tracker.py", "references/revision-protocols.md"],
+    "decision-landscape": ["scripts/synthesis_generator.py", "references/output-templates.md"],
+    "cognitive-noise": ["scripts/noise_injector.py", "references/cognitive-noise-guide.md"],
+    "multi-model-adapter": ["scripts/runtime_manifest.py",
+                            "references/provider-assignment-guide.md"],
     "role-musk": ["references/first-principles-examples.md"],
     "role-feynman": ["references/explanation-verification.md"],
     "role-munger": ["references/mental-models-catalog.md"],
@@ -72,12 +83,16 @@ SCRIPTS = [
     "skills/meta-supervisor/scripts/divergence_classifier.py",
     "skills/meta-supervisor/scripts/fallacy_detector.py",
     "skills/position-evolution/scripts/revision_tracker.py",
+    "skills/decision-landscape/scripts/synthesis_generator.py",
+    "skills/cognitive-noise/scripts/noise_injector.py",
+    "skills/multi-model-adapter/scripts/runtime_manifest.py",
 ]
 
 ROOT_FILES = [
     "README.md", "LICENSE", "CHANGELOG.md", ".gitignore",
     "docs/output-contract.md", "docs/example-session.md",
     "tools/validate_repo.py", "tools/demo_session.py",
+    "tools/run_evals.py", "tools/package_bundle.py", "evals/evals.json",
 ]
 
 # 禁用写法：命中后还要看是否处在"否定语境"里（如"禁止出现本轮必须一对一轮流"）
@@ -127,6 +142,7 @@ def main() -> int:
             check("结构", f"{skill}/{rel}", (d / rel).is_file())
 
     # 2-5) 逐技能内容检查
+    versions = {}
     for skill in ALL_SKILLS:
         skill_md = SKILLS / skill / "SKILL.md"
         if not skill_md.is_file():
@@ -135,6 +151,8 @@ def main() -> int:
         ok = isinstance(fm, dict) and fm.get("name") == skill and bool(fm.get("description"))
         check("frontmatter", skill, ok,
               "YAML 解析失败或缺 name/description" if not ok else "")
+        versions[skill] = str((fm or {}).get("metadata", {}).get("version", "")) \
+            if isinstance(fm, dict) else ""
 
         # 只有角色技能与本技能自身需要内嵌完整的角色输出契约字段
         if skill in ROLE_SKILLS or skill == "roundtable-orchestrator":
@@ -147,6 +165,17 @@ def main() -> int:
             check("章节结构", skill, ok_h,
                   "缺少必需二级标题或顺序不正确" if not ok_h else "")
 
+    # 版本一致性：全部技能 metadata.version 相同，且与 CHANGELOG 最新版本一致
+    bad_versions = {k: v for k, v in versions.items() if v != EXPECTED_VERSION}
+    check("版本一致", f"全部技能 == {EXPECTED_VERSION}", not bad_versions,
+          f"不一致：{bad_versions}" if bad_versions else "")
+    changelog = (ROOT / "CHANGELOG.md")
+    check("版本一致", f"CHANGELOG 含 v{EXPECTED_VERSION}",
+          changelog.is_file() and f"v{EXPECTED_VERSION}" in changelog.read_text(encoding="utf-8"))
+    contract_head = (ROOT / "docs" / "output-contract.md").read_text(encoding="utf-8").splitlines()[0]
+    check("版本一致", f"契约抬头含 v{EXPECTED_VERSION}", EXPECTED_VERSION in contract_head,
+          contract_head if EXPECTED_VERSION not in contract_head else "")
+
     # 禁用写法扫描（SKILL.md + references + docs）
     targets = list(ROOT.glob("skills/**/*.md")) + list(ROOT.glob("docs/*.md")) + [ROOT / "README.md"]
     for path in targets:
@@ -158,6 +187,10 @@ def main() -> int:
                     if any(w in line for w in NEGATION):
                         continue  # 否定语境，属于正确用法
                     check("禁用写法", f"{path.relative_to(ROOT)}:{lineno}", False, f"{label} → {line.strip()[:60]}")
+            m = FABRICATED_MODEL_RE.search(line)
+            if m and not any(w in line for w in NEGATION + ("占位符", "placeholder", "unspecified")):
+                check("禁用写法", f"{path.relative_to(ROOT)}:{lineno}", False,
+                      f"疑似编造真实模型名 {m.group(0)} → {line.strip()[:60]}")
 
     # 6) 脚本自检
     if not args.no_scripts:

@@ -3,7 +3,7 @@ name: position-evolution
 description: "圆桌讨论的立场演化机制：判定角色什么时候、以多大幅度修正自己的观点，记录 from/to/trigger，并阻止无新证据的从众漂移。当用户要求在讨论中允许角色被说服、需要记录某角色观点如何变化，或 roundtable-orchestrator 处理角色发言中的 revision 块、刷新下一轮立场基线时，必须使用本技能。"
 license: MIT
 metadata:
-  version: 1.0.0
+  version: 1.1.0
   layer: "Layer 3 · 观点迭代"
 ---
 

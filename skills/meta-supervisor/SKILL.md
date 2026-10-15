@@ -3,7 +3,7 @@ name: meta-supervisor
 description: "圆桌讨论的元认知监督者：不参与议题站队，专门挖掘所有人共同默认却从未论证的隐性假设、区分事实/价值/术语/伪分歧、标记信息缺口、筛查逻辑谬误，并把结论作为下一轮的强制输入。当用户要求挖掘讨论的底层前提、复盘一场讨论的质量、问「我们是不是在争论伪问题」「这场讨论的根本分歧是什么」，或 roundtable-orchestrator 在每轮结束后调用元认知层时，必须使用本技能。"
 license: MIT
 metadata:
-  version: 1.0.0
+  version: 1.1.0
   layer: "Layer 2 · 元认知监督"
 ---
 

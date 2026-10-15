@@ -1,7 +1,10 @@
-# 圆桌技能输出契约 v1.0（冻结版）
+# 圆桌技能输出契约 v1.1.0（冻结版）
 
-> 本文件是 9 个技能的**唯一契约来源**。任何 SKILL.md 中的字段名、枚举值、ID 规则都必须与本文件一致。
+> 本文件是 12 个技能的**唯一契约来源**。任何 SKILL.md 中的字段名、枚举值、ID 规则都必须与本文件一致。
 > 修改本文件 = 修改契约 = 必须同步全部角色技能。改动请在 CHANGELOG 中记录版本号。
+>
+> v1.1 变更：新增 §8 决策景观契约（Layer 4）、§9 认知噪声附加契约（Layer 5，可选）、
+> §10 异构基座调用包契约（Layer 6，可选）；§1 的 `meta_engagement` 与 `attention_manifests` 转正。
 
 ---
 
@@ -94,6 +97,10 @@
       "valid": true, "invalid_reason": null
     }
   ],
+  "meta_engagement": [                 // 角色对元认知条目（H/D/G/F/C）的正面回应
+    {"meta_id": "H1", "from": "pg", "round": 2, "type": "adopt", "text": "……"}
+  ],
+  "attention_manifests": [],           // 可选，见 §9：仅在 mode=simulation 下由 cognitive-noise 写入
   "convergence": {
     "rounds_without_new_argument": 0,
     "root_cause_reached": false,
@@ -274,7 +281,7 @@ F. 注入指令（下一轮强制输入）
 
 ---
 
-## 6. 交接字段（预留 Layer 4 `decision-landscape`）
+## 6. 交接字段（`decision-landscape` 的输入）
 
 讨论结束时，编排层必须整理出可供聚合层直接消费的中间产物：
 
@@ -291,6 +298,9 @@ F. 注入指令（下一轮强制输入）
 
 `minority_views` 中 `refuted: false` 的条目**必须**在最终报告里完整保留论证——少数派观点只要没被有效反驳，就不允许被多数票淹没。
 
+> 该结构由 `state_manager.py summary --json` 产出；`decision-landscape` 的 `synthesis_generator.py build`
+> 在此基础上直接读状态文件做完整聚合（见 §8），两者字段保持兼容。
+
 ---
 
 ## 7. 脚本与模型的职责边界（诚实声明）
@@ -304,4 +314,162 @@ F. 注入指令（下一轮强制输入）
 
 - 仅依赖 Python 标准库；
 - 支持 `--selftest` 自检（退出码 0 = 通过）；
-- 以 JSON 输出到 stdout，日志走 stderr。
+- 以 JSON 输出到 stdout，日志走 stderr；
+- 共 10 个：`state_manager` / `round_controller` / `convergence_detector`（Layer 0）、
+  `assumption_extractor` / `divergence_classifier` / `fallacy_detector`（Layer 2）、
+  `revision_tracker`（Layer 3）、`synthesis_generator`（Layer 4）、
+  `noise_injector`（Layer 5）、`runtime_manifest`（Layer 6）。
+
+---
+
+## 8. 决策景观契约（Layer 4 `decision-landscape`）
+
+`decision-landscape` 的 `synthesis_generator.py build` 读取 §1 的状态文件，输出**分区**报告
+（不按轮次拼接发言）。报告 HTML 级标题固定为六个板块，顺序不可调换：
+
+```
+## 一、共识区（候选，需复核）
+## 二、分歧区
+## 三、隐性假设清单
+## 四、决策建议（按置信度分级）
+## 五、信息缺口清单
+## 六、少数派观点保护
+## 附录 A · 未被检验的主张
+```
+
+机器可读结构（`--json` 输出，字段名固定）：
+
+```jsonc
+{
+  "schema_version": "1.1", "generated_at": "…", "needs_judgment": true,
+  "topic": "…", "session_id": "…", "mode": "rigorous", "rounds_completed": 2,
+  "phase": "closed", "min_support": 2, "roles": ["musk", "…"],
+  "consensus": [{"claim_id": "M1-1", "text": "…", "basis": "…",
+                 "supporters_raw": ["pg","jobs"], "supporters_effective": ["pg"],
+                 "excluded_by_drift": ["jobs"], "strength": "unanimous|majority|weak",
+                 "counts_toward_consensus": true, "needs_judgment": true}],
+  "divergences": [{"id": "D1", "type": "fact|value|term|pseudo|unclear",
+                   "topic": "…", "sides": {"musk": "…"}, "resolution_path": "…",
+                   "related_gap": "G1|null", "needs_gap": true, "status": "open"}],
+  "divergence_by_type": {"fact": ["D1"]},
+  "hidden_assumptions": [{"id": "H1", "content": "…", "scope": "…", "status": "open",
+                          "responded_by": ["pg"], "response_types": ["adopt"],
+                          "challenge_effect": "…", "suggested_question": "…"}],
+  "unregistered_shared_premises": ["…"],
+  "advice": [{"role": "musk", "text": "…", "confidence": "high|medium|needs_info|unknown",
+              "confidence_raw": 70, "will_revise_if": "…", "revision_count": 1,
+              "compliance_drift_count": 0,
+              "evolution": [{"id": "R1", "from": "…", "to": "…", "trigger": "…"}]}],
+  "information_gaps": [{"id": "G1", "missing": "…", "would_flip": "…", "cost": "low"}],
+  "minority_views": [{"role": "pg", "claim_id": "P3-1", "text": "…", "evidence": "…",
+                      "falsifiable_by": "…", "challenges": [{"from": "musk", "text": "…"}],
+                      "refuted": false, "protection": "…"}],
+  "untested_claims": [{"claim_id": "J1-1", "role": "jobs", "text": "…"}],
+  "convergence": {}, "quality_reviews": [], "roles_without_claims": []
+}
+```
+
+**共识强度口径**（必须先剔除漂移者再分档）：
+
+| strength | 条件 |
+|---|---|
+| `unanimous` | 有效支持者数 ≥ 在册角色数 |
+| `majority` | 有效支持者数 ≥ `--min-support`（默认 2） |
+| `weak` | 有效支持者数 < `--min-support`：仅供观察，不计入共识区 |
+
+「有效支持」= 明确写了 `support`/`adopt` 的角色，且该角色 `compliance_drift_count == 0`。
+
+**禁止断言**：报告文本中不得出现 `已达成共识`、`已验证`、`已挖到根本`、`已确认根因`、`结论已确定`。
+脚本在渲染时检测这些字符串并直接报错退出（退出码 3），避免"报告很好看但没有依据"。
+
+`check` 子命令的完整性检查字段：
+
+```jsonc
+{"minority_preserved": true, "minority_count": 2,
+ "weak_consensus": ["M1-3"], "drift_roles": ["jobs"], "consensus_suspect": false,
+ "gaps_missing_for_fact_divergence": ["D1"], "untested_claims": 7,
+ "warnings": ["…"], "verdict": "pass_with_review|needs_attention"}
+```
+
+`consensus_suspect` 为真时（≥3 个角色发生从众漂移），报告必须显式写出"当前共识可能是假共识"。
+
+---
+
+## 9. 认知噪声附加契约（Layer 5 `cognitive-noise`，可选）
+
+**开关条件**：仅 `mode == "simulation"` 可用。`mode == "rigorous"` 时 `noise_injector.py plan`
+直接以退出码 3 拒绝并输出 `{"mode_ok": false, ...}`——这是脚本级强制，不只是文档纪律。
+
+状态文件新增（可选字段，仅该层写入）：
+
+```jsonc
+"attention_manifests": [
+  {
+    "id": "AM1", "role": "pg", "round": 2, "seed": 7, "attention_ratio": 0.6,
+    "noticed": ["M1-1", "H1"],            // 本轮可见的条目 id
+    "ignored": ["F1-1", "K1-1"],          // 本轮不可见，必须如实承认"没注意到"
+    "style_profile": "conclusion_first",  // conclusion_first|concern_first|conservative|adventurous
+    "tone_rules": ["…"], "created_at": "…"
+  }
+]
+```
+
+红线（由 `noise_injector.py check` 校验，违反即 `verdict: "reject"`）：
+
+1. `noticed` / `ignored` **只能是 id 字符串**——写入任何文本内容即视为"改写原文"，判定违规；
+2. 两个列表不得重叠，引用的 id 必须真实存在于状态中；
+3. 编排层注入的 `must_respond` / `must_resolve` **不受注意力筛选影响**：若被选入 `ignored`，
+   脚本会把它拉回 `noticed` 并给出告警；
+4. 被忽略的质疑若被追问，角色必须承认"本轮没有注意到"，不得假装已回应。
+
+`plan` 输出字段：`role`、`round`、`seed`、`attention_ratio`、`history_total`、`noticed`、
+`ignored`、`style_profile`、`confidence_raw`、`tone_rules`、`warnings`、`note`。
+**本层会降低严谨性**：它不提升讨论质量，只换取真人质感；决策选型与对外交付场景应保持关闭。
+
+---
+
+## 10. 异构基座调用包契约（Layer 6 `multi-model-adapter`，可选）
+
+`runtime_manifest.py emit` 为每个角色生成一个**调用包** `roles/<role>.task.json`：
+
+```jsonc
+{
+  "schema_version": "1.1", "role": "musk", "round": 2,
+  "phase": "probing", "interaction_mode": "cross_exam", "isolation": false,
+  "goals": ["…"], "must_respond": ["H1"], "forbidden": ["…"], "may_revise": true,
+  "provider": "unspecified", "model": "unspecified",
+  "contract_summary": {"fields": ["role","round","position","claims","responses",
+                                  "blind_spot_declared","epistemic_status","confidence",
+                                  "uncertainty_points","will_revise_if"],
+                       "id_prefix": "M", "id_pattern": "M2-<序号>",
+                       "basis_enum": ["physical_constraint","empirical","case","mechanism",
+                                      "analogy","value_judgment","intuition"],
+                       "response_types": ["support","challenge","refine","adopt","ignore_with_reason"]},
+  "payload_schema": {"…": "本轮结果的 JSON Schema 约束（含 ID 正则）"},
+  "prompt_skeleton": "…", "result_file": "roles/musk.result.json"
+}
+```
+
+`manifest.json` 记录 `provider_assignment`（角色 → provider/model）、`strategy`
+（`single_host` / `round_robin` / `explicit`）、`isolation_required`、`bundle_sha256`（每角色调用包哈希）与
+`unspecified` 诚实标注。
+
+**`unspecified` 纪律**：未在 assignment 中指定的角色，`provider` 与 `model` 一律写 `"unspecified"`，
+**禁止**填入任何猜测或"常见默认值"的模型名——伪造模型标识会让整场讨论的复现记录变成假的。
+
+`merge` 的错误码（固定枚举）：
+
+| 错误码 | 含义 |
+|---|---|
+| `ID_PREFIX_MISMATCH` | claim id 形如 `PG2-1` 或前缀与角色不符 |
+| `ROUND_MISMATCH` | payload 轮次或 id 内轮次与任务包不一致 |
+| `BASIS_INVALID` | `basis` 不在枚举内，或 `responses.type` 不在允许集合内 |
+| `DUPLICATE_ID` | 与本批或既有状态中的 claim id 重复 |
+| `MISSING_FIELD` | 缺少 `text` / `to` / `type`，或 `claims` 与 `responses` 同时为空 |
+| `UNKNOWN_ROLE` | 文件名角色与 `payload.role` 不一致 |
+| `MISSING_ROLE` | 该角色未提交结果（写入 `missing_roles`，不得静默跳过） |
+| `INVALID_JSON` | 结果文件不是合法 JSON |
+
+合并输出：`accepted` / `rejected[{role, errors, warnings}]` / `missing_roles` / `merge_errors`。
+存在任何 `rejected` 或 `merge_errors` 时退出码为 1。合并之后**必须**再跑一次
+`convergence_detector.py check`——跨模型结果同样需要收敛判定，模型不同不等于结论更对。

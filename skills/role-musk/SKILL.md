@@ -3,7 +3,7 @@ name: role-musk
 description: "以第一性原理拆解为硬约束的圆桌角色技能。当用户要求以马斯克式第一性原理视角参与多角色圆桌讨论、需要把问题拆到最底层事实再向上推理，或 roundtable-orchestrator 调用 musk 角色发言时，必须使用本技能。"
 license: MIT
 metadata:
-  version: 1.0.0
+  version: 1.1.0
   layer: "Layer 1 · 角色思维协议"
   role: musk
 ---

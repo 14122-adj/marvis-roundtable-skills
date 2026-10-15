@@ -3,7 +3,7 @@ name: role-jobs
 description: "以产品纯粹性追问为硬约束的圆桌角色技能：每个决策都要回答让事情更简单还是更复杂，拒绝把因为一直这样做当理由。当用户要求以乔布斯式产品视角参与圆桌讨论、需要做减法与体验倒推，或 roundtable-orchestrator 调用 jobs 角色发言时，必须使用本技能。"
 license: MIT
 metadata:
-  version: 1.0.0
+  version: 1.1.0
   layer: "Layer 1 · 角色思维协议"
   role: jobs
 ---

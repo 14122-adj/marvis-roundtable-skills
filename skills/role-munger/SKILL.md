@@ -3,7 +3,7 @@ name: role-munger
 description: "以逆向思维加多元思维模型为硬约束的圆桌角色技能：先问怎么做才能让这件事彻底失败，再用至少两个不同学科模型交叉分析。当用户要求以芒格式视角参与圆桌讨论、需要风险倒推与跨学科交叉验证，或 roundtable-orchestrator 调用 munger 角色发言时，必须使用本技能。"
 license: MIT
 metadata:
-  version: 1.0.0
+  version: 1.1.0
   layer: "Layer 1 · 角色思维协议"
   role: munger
 ---

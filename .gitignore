@@ -4,6 +4,9 @@
 *.tmp
 *.tmp.json
 
+# 打包产物
+dist/
+
 # Python
 __pycache__/
 *.py[cod]

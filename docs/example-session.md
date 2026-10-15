@@ -13,7 +13,9 @@
 4. R2 自由交叉：一次有效修正 + 一次从众漂移
 5. R2.5 二次扫描、覆盖度与收敛判定
 6. 交接摘要原文
-7. 这个例子暴露了什么（含脚本的误报）
+7. Layer 4 决策景观报告（本场讨论的实际产出）
+8. 这个例子暴露了什么（含脚本的误报）
+9. 如何复现
 
 ---
 
@@ -202,7 +204,55 @@ response_attention: {musk:1, jobs:1, pg:1, feynman:1}   （没有出现"全员�
 - **少数派观点被强制保留**：M1-1 与 J1-1 都收到了质疑且没有支持者，因此进入
   `minority_views`（`refuted: false`）。它们不允许被多数票淹没。
 
-## 7. 这个例子暴露了什么
+## 7. Layer 4 决策景观报告（本场讨论的实际产出）
+
+`python skills/decision-landscape/scripts/synthesis_generator.py build --state S --out 决策景观.md`
+把上面的状态聚合成分区报告。以下是**未经修改的真实片段**：
+
+```markdown
+# 决策景观报告：【示例数据】科创竞赛资源应该怎么分配
+- 会话：`rt-demo`　模式：rigorous　完成轮次：2　阶段：probing
+- **本报告是结构聚合的产物**：所有结论性条目都需复核（`needs_judgment`）
+
+## 一、共识区（候选，需复核）
+无。按当前口径（≥2 个角色的明确支持）没有任何结论达到共识门槛——这是正常结果，不为报告完整性而凑条目。
+弱支持（未达门槛，仅供观察）：
+- P2-1（支持者 musk）：为让项目「看起来获奖概率高」而做的包装成本，是当前分配规则的隐性成本
+
+## 二、分歧区
+- **D1 · 事实分歧（可补信息解决）**
+  - musk：固定预算下真正可优化的是单位获奖产出的成本，而不是获奖数量
+  - pg：为让项目「看起来获奖概率高」而做的包装成本，是当前分配规则的隐性成本
+  - ⚠ 这是事实分歧但没有配套的信息缺口 G：消解路径不明（必须在交付前补上或说明为何不可得）
+- **D2 · 待判定（需模型/人裁定）**：jobs「只保留一件事」 vs feynman「成败定义没写下来」
+
+## 三、隐性假设清单
+- **H1**（R0 共享前提，状态 open）：竞赛必须拿奖才算成功
+  - 被回应的角色：feynman, jobs, musk, pg｜回应方式：adopt, challenge, refine, support
+- **H2**：资源总量固定，不讨论外部争取　→ 被回应的角色：无
+
+## 四、决策建议（按置信度分级）
+- 高置信度：karpathy（75）先把「分配」拆成可独立验证的模块
+- 中等：musk（62，含立场演化 R1）、feynman（58）、munger（65）、jobs（52 ⚠ 从众漂移 1 次）、pg（45）
+
+## 五、信息缺口清单
+无登记。若存在事实分歧，这里应当至少有一条。
+
+## 六、少数派观点保护
+- **M1-1（musk）**：论据类型 mechanism；证据「成本=投入/产出…」
+  - 收到的质疑（pg，第 2 轮）：你的成本下界推演只算了直接投入，忽略了为迎合评审口径产生的包装成本
+  - 处置：未被判定为已反驳，**完整保留**；不得以多数意见覆盖。
+```
+
+三个值得注意的地方：
+
+1. **共识区为空是诚实的输出**，而不是失败。脚本宁可让"共识区"空着，也不把"弱支持"写成共识；
+2. **`check` 会直接把问题摆出来**：`gaps_missing_for_fact_divergence=["D1"]`、`drift_roles=["jobs"]`、
+   `untested_claims=7`——这三条正是交付前必须处理或如实说明的事项；
+3. **报告级护栏**：渲染时若出现"已达成共识 / 已验证 / 已挖到根本"这类断言，脚本直接报错退出（退出码 3），
+   从机制上防止"报告很好看但没有依据"。
+
+## 8. 这个例子暴露了什么
 
 1. **机制确实能碰到前提**：H1 被登记、被注入、被四个角色正面回应——这是纯脚本部分就能做到的。
 2. **前提被"回应"不等于被"解决"**：H1 回应率 4/4，但它是被接受、被收窄还是被推翻，仍需模型判断；
@@ -212,14 +262,22 @@ response_attention: {musk:1, jobs:1, pg:1, feynman:1}   （没有出现"全员�
 4. **规则检测会误报**：F1/F2 就是例子。`needs_judgment` 不是免责声明，而是**强制的人工复核入口**。
 5. **最容易被忽略的指标**：`untested_total`。多角色讨论的质量瓶颈通常不在"说得多不多"，
    而在"有多少主张真的被检查过"。
+6. **可选层是可验证的开关，不是默认行为**：本场为 `rigorous` 模式，认知噪声 `plan` 被脚本以退出码 3
+   拒绝；`runtime_manifest.py emit` 为第 3 轮生成了 6 个角色的调用包，`provider/model` 全部为
+   `unspecified`——没有编造任何模型名。
 
 ## 如何复现
 
 ```bash
 cd marvis-roundtable-skills
-python tools/demo_session.py              # 完整流程与关键输出
-python tools/demo_session.py --quiet      # 只跑流程，最后打印摘要
-# 状态文件：.roundtable-demo/state.json
+python tools/demo_session.py                  # 8 步端到端：含决策景观、噪声拒绝、多基座调用包
+python tools/demo_session.py --quiet          # 只跑流程，最后打印摘要
+python tools/run_evals.py                     # 23 条离线评测
+python tools/validate_repo.py                 # 83 项仓库自检
+
+# 产物：.roundtable-demo/state.json、decision-landscape.md、bundle-round3/
+python skills/decision-landscape/scripts/synthesis_generator.py check \
+  --state .roundtable-demo/state.json         # 完整性检查（少数派/假共识/缺口）
 python skills/roundtable-orchestrator/scripts/state_manager.py summary \
-  --state .roundtable-demo/state.json --json     # 交接块（预留给 decision-landscape）
+  --state .roundtable-demo/state.json --json  # 交接块
 ```

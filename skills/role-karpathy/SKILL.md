@@ -3,7 +3,7 @@ name: role-karpathy
 description: "以系统分解与可复现性检查为硬约束的圆桌角色技能：把问题拆成可独立验证的子模块，逐条检查论断是否有可复现的证据链。当用户要求以工程/机器学习系统视角参与圆桌讨论、需要模块化拆解与证据链审查，或 roundtable-orchestrator 调用 karpathy 角色发言时，必须使用本技能。"
 license: MIT
 metadata:
-  version: 1.0.0
+  version: 1.1.0
   layer: "Layer 1 · 角色思维协议"
   role: karpathy
 ---

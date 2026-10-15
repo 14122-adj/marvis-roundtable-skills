@@ -1,0 +1,179 @@
+{
+  "schema_version": "1.1",
+  "updated": "2026-06-01",
+  "note": "离线评测集。不调用任何模型：trigger 类为『描述-提示词关键词覆盖率』启发式检查（非语义判断，阈值只是回归护栏）；command 类真实执行脚本并断言退出码与输出；artifact 类检查文件结构与禁用内容。真正的模型级评测需要宿主提供 LLM，见 --live 说明。",
+  "thresholds": {
+    "trigger_min_coverage": 0.10,
+    "trigger_negative_max_coverage": 0.08
+  },
+  "evals": [
+    {
+      "id": "trigger-orchestrator",
+      "type": "trigger",
+      "skill": "roundtable-orchestrator",
+      "prompt": "开启圆桌讨论：要不要把年度评审改成季度评审",
+      "expect": { "should_trigger": true }
+    },
+    {
+      "id": "trigger-meta-supervisor",
+      "type": "trigger",
+      "skill": "meta-supervisor",
+      "prompt": "这场讨论的底层前提是什么？我们是不是在争论伪问题",
+      "expect": { "should_trigger": true }
+    },
+    {
+      "id": "trigger-position-evolution",
+      "type": "trigger",
+      "skill": "position-evolution",
+      "prompt": "让角色在讨论中可以被说服并记录他的观点是怎么变的",
+      "expect": { "should_trigger": true }
+    },
+    {
+      "id": "trigger-decision-landscape",
+      "type": "trigger",
+      "skill": "decision-landscape",
+      "prompt": "把这些讨论汇总成一份决策报告，哪些结论能用、哪些还缺信息",
+      "expect": { "should_trigger": true }
+    },
+    {
+      "id": "trigger-cognitive-noise",
+      "type": "trigger",
+      "skill": "cognitive-noise",
+      "prompt": "讨论太干净太理性了，我想模拟真人的表达质感和不确定性",
+      "expect": { "should_trigger": true }
+    },
+    {
+      "id": "trigger-multi-model-adapter",
+      "type": "trigger",
+      "skill": "multi-model-adapter",
+      "prompt": "担心多角色共享同一个模型导致盲区一致，想用不同模型跑同一个圆桌",
+      "expect": { "should_trigger": true }
+    },
+    {
+      "id": "trigger-role-musk",
+      "type": "trigger",
+      "skill": "role-musk",
+      "prompt": "用第一性原理把这个方案拆到最底层的事实再往上推",
+      "expect": { "should_trigger": true }
+    },
+    {
+      "id": "trigger-role-feynman",
+      "type": "trigger",
+      "skill": "role-feynman",
+      "prompt": "用外行能听懂的一句话解释这个说法，解释不了就说明没真懂",
+      "expect": { "should_trigger": true }
+    },
+    {
+      "id": "trigger-role-munger",
+      "type": "trigger",
+      "skill": "role-munger",
+      "prompt": "先想清楚怎么做才能让这件事彻底失败，再用两个学科模型交叉分析",
+      "expect": { "should_trigger": true }
+    },
+    {
+      "id": "trigger-role-jobs",
+      "type": "trigger",
+      "skill": "role-jobs",
+      "prompt": "这个决策让事情更简单还是更复杂？先做减法砍掉多余流程",
+      "expect": { "should_trigger": true }
+    },
+    {
+      "id": "trigger-role-karpathy",
+      "type": "trigger",
+      "skill": "role-karpathy",
+      "prompt": "把问题拆成可以独立验证的子模块，检查每个论断的证据链能不能复现",
+      "expect": { "should_trigger": true }
+    },
+    {
+      "id": "trigger-role-pg",
+      "type": "trigger",
+      "skill": "role-pg",
+      "prompt": "别从抽象原则出发，先给我一个真实案例再从案例里提炼模式",
+      "expect": { "should_trigger": true }
+    },
+    {
+      "id": "negative-code-debug",
+      "type": "trigger",
+      "skill": null,
+      "prompt": "帮我看看这段 Python 代码为什么报 KeyError，顺便跑一下测试",
+      "expect": { "should_trigger": false }
+    },
+    {
+      "id": "negative-simple-lookup",
+      "type": "trigger",
+      "skill": null,
+      "prompt": "今天几号？顺便告诉我北京天气怎么样",
+      "expect": { "should_trigger": false }
+    },
+    {
+      "id": "cmd-state-manager",
+      "type": "command",
+      "cmd": ["python", "{ROOT}/skills/roundtable-orchestrator/scripts/state_manager.py", "selftest"],
+      "expect_exit": 0,
+      "stderr_contains": ["selftest OK"]
+    },
+    {
+      "id": "cmd-convergence-detector",
+      "type": "command",
+      "cmd": ["python", "{ROOT}/skills/roundtable-orchestrator/scripts/convergence_detector.py", "selftest"],
+      "expect_exit": 0,
+      "stderr_contains": ["selftest OK"]
+    },
+    {
+      "id": "cmd-synthesis-generator",
+      "type": "command",
+      "cmd": ["python", "{ROOT}/skills/decision-landscape/scripts/synthesis_generator.py", "selftest"],
+      "expect_exit": 0,
+      "stderr_contains": ["selftest OK"]
+    },
+    {
+      "id": "cmd-noise-injector",
+      "type": "command",
+      "cmd": ["python", "{ROOT}/skills/cognitive-noise/scripts/noise_injector.py", "selftest"],
+      "expect_exit": 0,
+      "stderr_contains": ["selftest OK"]
+    },
+    {
+      "id": "cmd-runtime-manifest",
+      "type": "command",
+      "cmd": ["python", "{ROOT}/skills/multi-model-adapter/scripts/runtime_manifest.py", "selftest"],
+      "expect_exit": 0,
+      "stderr_contains": ["selftest OK"]
+    },
+    {
+      "id": "cmd-noise-refused-in-rigorous",
+      "type": "command",
+      "cmd": ["python", "{ROOT}/tools/demo_session.py", "--quiet", "--out", "{TMP}/demo"],
+      "expect_exit": 0,
+      "stdout_contains": ["决策景观", "认知噪声在 rigorous 模式下被拒绝", "多基座调用包"]
+    },
+    {
+      "id": "artifact-contract-core-fields",
+      "type": "artifact",
+      "path": "docs/output-contract.md",
+      "must_contain": [
+        "epistemic_status",
+        "will_revise_if",
+        "compliance_drift",
+        "must_respond",
+        "meta_engagement",
+        "attention_manifests"
+      ],
+      "must_not_contain": ["TODO", "FIXME", "待补"]
+    },
+    {
+      "id": "artifact-no-fabricated-models",
+      "type": "artifact",
+      "path": "skills/multi-model-adapter/references/provider-assignment-guide.md",
+      "must_contain": ["unspecified"],
+      "must_not_contain": ["gpt-", "claude-", "gemini-", "llama-", "qwen"]
+    },
+    {
+      "id": "artifact-every-skill-has-description",
+      "type": "artifact_glob",
+      "glob": "skills/*/SKILL.md",
+      "must_contain": ["description:"],
+      "must_not_contain": ["TODO"]
+    }
+  ]
+}

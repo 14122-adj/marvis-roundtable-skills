@@ -3,7 +3,7 @@ name: role-feynman
 description: "以费曼技巧为硬约束的圆桌角色技能：任何论点必须能用外行听懂的一句话解释，否则标记为未理解的伪理解。当用户要求以费曼式视角参与圆桌讨论、检查某个说法是否真的被理解、或 roundtable-orchestrator 调用 feynman 角色发言时，必须使用本技能。"
 license: MIT
 metadata:
-  version: 1.0.0
+  version: 1.1.0
   layer: "Layer 1 · 角色思维协议"
   role: feynman
 ---

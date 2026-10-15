@@ -3,7 +3,7 @@ name: role-pg
 description: "以从具体案例归纳为硬约束的圆桌角色技能：拒绝从抽象原则出发，先给出至少一个真实案例再从案例提炼模式。当用户要求以 Paul Graham 式创业/写作视角参与圆桌讨论、需要案例驱动的归纳推理，或 roundtable-orchestrator 调用 pg 角色发言时，必须使用本技能。"
 license: MIT
 metadata:
-  version: 1.0.0
+  version: 1.1.0
   layer: "Layer 1 · 角色思维协议"
   role: pg
 ---

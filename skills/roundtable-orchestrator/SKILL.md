@@ -3,7 +3,7 @@ name: roundtable-orchestrator
 description: "多角色圆桌讨论的编排引擎：调度角色思维协议、元认知监督者与立场迭代，按目标驱动推进多轮讨论并产出决策景观素材。当用户要求组织多角色圆桌讨论、让不同视角就同一问题交叉论证，或说「开启圆桌讨论」「让几个角色辩一辩」「多视角会诊」「圆桌推演」「让马斯克/费曼/芒格/乔布斯/Karpathy/Paul Graham 一起讨论」时，必须使用本技能。"
 license: MIT
 metadata:
-  version: 1.0.0
+  version: 1.1.0
   layer: "Layer 0 · 编排引擎"
 ---
 
