@@ -1,10 +1,13 @@
-# 圆桌技能输出契约 v1.1.0（冻结版）
+# 圆桌技能输出契约 v1.2.0（冻结版）
 
-> 本文件是 12 个技能的**唯一契约来源**。任何 SKILL.md 中的字段名、枚举值、ID 规则都必须与本文件一致。
+> 本文件是 13 个技能的**唯一契约来源**。任何 SKILL.md 中的字段名、枚举值、ID 规则都必须与本文件一致。
 > 修改本文件 = 修改契约 = 必须同步全部角色技能。改动请在 CHANGELOG 中记录版本号。
 >
 > v1.1 变更：新增 §8 决策景观契约（Layer 4）、§9 认知噪声附加契约（Layer 5，可选）、
 > §10 异构基座调用包契约（Layer 6，可选）；§1 的 `meta_engagement` 与 `attention_manifests` 转正。
+>
+> v1.2 变更：新增 §11 终极圆桌契约（`ultimate-roundtable` v2.0.0，四阶段 + 火花判据 + 存活率模型）。
+> 该技能按上游 spec 独立发版（v2.0.0），不参与本仓库其余技能的版本对齐。
 
 ---
 
@@ -473,3 +476,109 @@ F. 注入指令（下一轮强制输入）
 合并输出：`accepted` / `rejected[{role, errors, warnings}]` / `missing_roles` / `merge_errors`。
 存在任何 `rejected` 或 `merge_errors` 时退出码为 1。合并之后**必须**再跑一次
 `convergence_detector.py check`——跨模型结果同样需要收敛判定，模型不同不等于结论更对。
+
+---
+
+## 11. 终极圆桌契约（`ultimate-roundtable` v2.0.0）
+
+高强度决策压缩流程：**摊牌 → 对抗 → 沙盘 → 降维打击**。
+它与 §1–§10 的圆桌状态文件**并存但独立**（有自己的 `state.json` 结构），
+两者通过 `roundtable-orchestrator` 的交接块衔接。
+
+### 11.1 四阶段与退出码
+
+| 阶段 | 命令 | 必须产出 | 失败退出码 |
+|---|---|---|---|
+| init | `init --topic` | `state.json` | 2 |
+| 一 | `stage1 --file roles.json` | 6 条 `[数据诉求]` + 每条 `tool_result` | 3 |
+| 二 | `stage2 --file clash.json` | 3v3 分营 + 内心戏 + 火花检测通过 | 3（校验）/ **4（无火花，强制重开）** |
+| 三 | `stage3 --file sandbox.json` | ≥3 月度节点 + risks/assumptions/attacks + action_plan | 3 |
+| 四 | `stage4 --file meta.json` | 共同隐性假设 + 被证伪前提 + ≤200 字记忆 | 3 |
+| 报告 | `report --state --out` | 冻结五节报告 | 3 |
+
+阶段之间有硬顺序：跳过前一阶段一律退出码 3。
+
+### 11.2 数据诚实性（强制）
+
+阶段一每条 `tool_result` 必须二选一：
+
+```jsonc
+{"source": "tool", "tool": "web_search", "query": "...", "result": "...", "obtained_at": "..."}  // 真实调用
+{"source": "text", "simulated": true, "tool": "...", "query": "...", "result": "..."}            // 明确模拟
+```
+
+| 情形 | 判定 |
+|---|---|
+| `source: tool` 且 `simulated: true` | 标注矛盾 → 拒绝 |
+| 既非 `tool` 也未标 `simulated: true` | **把模拟数据伪装成真实数据** → 拒绝 |
+| 报告头部 | 必须打印「真实工具调用 N 条 / 模拟数据 M 条」 |
+
+### 11.3 火花判据（禁止和稀泥的可执行版本）
+
+`clash_analyzer.py spark` 的六个计数，任一不达标即 `sparked: false` → 退出码 4：
+
+| 字段 | 含义 | 默认阈值 |
+|---|---|---|
+| `attack_count` | 蓝军有效攻击（有靶点 + 有内容） | ≥ 3 |
+| `defense_count` | 红军有效防御/修补 | ≥ 2 |
+| `target_spread` | 被攻击的不同 claim 数 | ≥ 2 |
+| `signal_total` | 攻击+防御+立场修正+新论据 | ≥ 3 |
+| `hollow_ratio` | 空洞发言占比（"我觉得挺好的""各有优劣"） | ≤ 0.34 |
+| `unmet_must_respond` | 未回应的元认知强制条目 | 必须为空 |
+
+阈值可在 `state.clash_thresholds` 覆盖；**不允许调到 0**（等于关掉这条规则）。
+
+### 11.4 存活率模型（算术，可手算复现）
+
+```
+survival = 0.40 × risk_residual      # 100 × (1 − 平均(severity × probability))；无风险记 0
+         + 0.25 × evidence_coverage  # 有关键假设中带 evidence 的比例
+         + 0.20 × defense_quality    # attacks 中 defended=true 的比例
+         + 0.15 × plan_integrity     # Do/Don't/NeedInfo 三栏填充率
+```
+
+`≥70 high`｜`40–69 medium`｜`<40 low`。`band=low` 时**不得直接交付**，
+必须先补 `Need Info` 或改设计。
+
+### 11.5 报告格式（冻结）
+
+```markdown
+### 📊 终极圆桌决策报告
+#### 1. 核心共识与分歧底牌
+#### 2. 击穿的隐性假设（元认知发现）
+#### 3. 行动指令 (Action Items)   ← Do / Don't / Need Info 三栏均不可为空
+#### 4. 沙盘推演存活率评估
+#### 5. 长期记忆写入             ← [MEMORY_UPDATE]，≤200 字
+```
+
+出现下列任一情况时 `report` 直接报错（退出码 3）：
+任一行动栏为空；缺存活率；缺长期记忆；记忆超 200 字；
+文本中出现禁止措辞 `已达成共识` / `已验证` / `已挖到根本` / `结论已确定` /
+`我觉得挺好的` / `各有优劣` / `见仁见智` / `综合考虑吧`。
+
+### 11.6 状态字段
+
+```jsonc
+{
+  "schema_version": "2.0.0", "session_id": "ur-20261101-012900",
+  "topic": "…", "stage": "stage4_done", "stages_done": ["stage1","stage2","stage3","stage4"],
+  "roles": ["musk","feynman","munger","jobs","karpathy","pg"],
+  "stage1": {"confessions": [], "data_demands": [{"role":"musk","demand":"…"}],
+             "tool_results": [{"role":"musk","source":"tool","simulated":false,"result":"…"}]},
+  "stage2": {"exchanges": [{"from":"munger","camp":"blue","inner_thought":"…",
+                            "interrupt":true,"target_claim":"M1-1","text":"…"}],
+             "camps": {"blue":["…"],"red":["…"]}, "spark": {}},
+  "stage3": {"sandbox": {"plan":"…","runners":["karpathy","musk"],"timeline":[],
+                         "risks":[],"key_assumptions":[],"attacks":[],
+                         "action_plan":{"do":[],"dont":[],"need_info":[]},
+                         "evaluation":{"survival_rate":52,"band":"medium"}},
+             "summons": [{"role":"法务专家","reason":"…","statement":"…"}]},
+  "stage4": {"meta": {"shared_hidden_assumption":"…","assumption_broken":["…"],
+                      "ignored_dimension":"…","consensus":"…","core_divergence":"…"},
+             "memory": "≤200 字"},
+  "camps": {}, "clash_exchanges": [], "sandbox": {}, "clash_spark": {}
+}
+```
+
+`stage2` 与顶层的 `camps` / `clash_exchanges` 保持同步，因为 `clash_analyzer.py`
+读的是顶层字段（便于单独调用）；`stage3.sandbox` 与顶层 `sandbox` 同理。

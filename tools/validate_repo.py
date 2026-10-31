@@ -29,10 +29,13 @@ ROOT = Path(__file__).resolve().parents[1]
 SKILLS = ROOT / "skills"
 
 CORE_SKILLS = ["roundtable-orchestrator", "meta-supervisor", "position-evolution",
-               "decision-landscape", "cognitive-noise", "multi-model-adapter"]
+               "decision-landscape", "cognitive-noise", "multi-model-adapter",
+               "ultimate-roundtable"]
 ROLE_SKILLS = ["role-musk", "role-feynman", "role-munger", "role-jobs", "role-karpathy", "role-pg"]
 ALL_SKILLS = CORE_SKILLS + ROLE_SKILLS
-EXPECTED_VERSION = "1.1.0"
+EXPECTED_VERSION = "1.2.0"
+# 版本例外：ultimate-roundtable 按上游 spec 独立发版（v2.0.0），不参与统一版本对齐
+VERSION_OVERRIDES = {"ultimate-roundtable": "2.0.0"}
 
 # 不得出现在文档里的真实模型名（本包一律用占位符或 unspecified）
 FABRICATED_MODEL_RE = re.compile(
@@ -67,6 +70,9 @@ EXPECTED_FILES = {
     "cognitive-noise": ["scripts/noise_injector.py", "references/cognitive-noise-guide.md"],
     "multi-model-adapter": ["scripts/runtime_manifest.py",
                             "references/provider-assignment-guide.md"],
+    "ultimate-roundtable": ["scripts/ultimate_orchestrator.py", "scripts/clash_analyzer.py",
+                            "references/adversarial-tactics.md",
+                            "references/report-template.md"],
     "role-musk": ["references/first-principles-examples.md"],
     "role-feynman": ["references/explanation-verification.md"],
     "role-munger": ["references/mental-models-catalog.md"],
@@ -86,6 +92,8 @@ SCRIPTS = [
     "skills/decision-landscape/scripts/synthesis_generator.py",
     "skills/cognitive-noise/scripts/noise_injector.py",
     "skills/multi-model-adapter/scripts/runtime_manifest.py",
+    "skills/ultimate-roundtable/scripts/ultimate_orchestrator.py",
+    "skills/ultimate-roundtable/scripts/clash_analyzer.py",
 ]
 
 ROOT_FILES = [
@@ -165,10 +173,12 @@ def main() -> int:
             check("章节结构", skill, ok_h,
                   "缺少必需二级标题或顺序不正确" if not ok_h else "")
 
-    # 版本一致性：全部技能 metadata.version 相同，且与 CHANGELOG 最新版本一致
-    bad_versions = {k: v for k, v in versions.items() if v != EXPECTED_VERSION}
-    check("版本一致", f"全部技能 == {EXPECTED_VERSION}", not bad_versions,
-          f"不一致：{bad_versions}" if bad_versions else "")
+    # 版本一致性：除 VERSION_OVERRIDES 例外外，全部技能 metadata.version 相同，
+    # 且与 CHANGELOG / 契约抬头对齐
+    bad_versions = {k: v for k, v in versions.items()
+                    if v != VERSION_OVERRIDES.get(k, EXPECTED_VERSION)}
+    check("版本一致", f"全部技能 == {EXPECTED_VERSION}（例外 {list(VERSION_OVERRIDES)}）",
+          not bad_versions, f"不一致：{bad_versions}" if bad_versions else "")
     changelog = (ROOT / "CHANGELOG.md")
     check("版本一致", f"CHANGELOG 含 v{EXPECTED_VERSION}",
           changelog.is_file() and f"v{EXPECTED_VERSION}" in changelog.read_text(encoding="utf-8"))

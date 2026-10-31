@@ -2,6 +2,30 @@
 
 遵循语义化版本。字段与枚举的改动一律同步 `docs/output-contract.md` 并提升契约版本号。
 
+## v1.2.0 — 2026-11-01
+
+新增 `ultimate-roundtable` v2.0.0（上游 spec 独立发版），契约升到 v1.2.0（新增 §11），
+其余 12 个技能版本号对齐到 1.2.0。
+
+**`ultimate-roundtable`（Layer 0+ · 高强度审议）**
+- `ultimate_orchestrator.py`：四阶段推进（摊牌 → 对抗 → 沙盘 → 降维打击），阶段间硬顺序校验
+- 阶段一强制 `[数据诉求]` + `tool_result`，**区分真实工具调用与模拟数据**，伪装数据直接拒绝
+- 阶段二强制内心戏 `(Inner Thought: ...)`、`[打断]` 标签、3v3 红蓝分营
+- 阶段三沙盘：≥3 月度节点、每节点必须给 `metric` 或 `error`、必须由 Karpathy + 马斯克主推、
+  `[召唤：…]` 临时角色需写清 reason/statement
+- 阶段四：共同隐性假设 + 被证伪前提 + `[MEMORY_UPDATE]`（≤200 字硬门槛）
+- `clash_analyzer.py`：**火花检测**（六个计数，任一不达标 → 退出码 4 强制重开）与
+  **存活率模型**（四项加权，公式公开可手算复现）
+- 报告格式冻结为五节；行动栏有空、缺存活率、缺记忆、出现"已达成共识/各有优劣"等措辞一律报错退出
+- `tools/demo_ultimate.py`：端到端演示，含两条**真实本地测量**（仓库文件数/行数）与四条明确标注的模拟数据
+
+**工程**
+- `validate_repo.py` 扩到 91 项：新增 `ultimate-roundtable` 结构与两个脚本自检，
+  版本一致性支持 `VERSION_OVERRIDES`（ultimate 独立发版）
+- `evals/evals.json` 扩到 27 条：新增 ultimate 可触发性、两个脚本命令、报告结构产物检查
+- `package_bundle.py`：导入顺序追加 `ultimate-roundtable`
+- 全部 12 个脚本通过 `--selftest`
+
 ## v1.1.0 — 2026-06-01
 
 路线图 P2–P5 落地：新增 3 个技能、3 个脚本、3 份参考手册、离线评测集与打包器；契约升到 v1.1.0。

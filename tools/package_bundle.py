@@ -44,6 +44,7 @@ IMPORT_ORDER = [
     "role-musk", "role-feynman", "role-munger", "role-jobs", "role-karpathy", "role-pg",
     "cognitive-noise",
     "multi-model-adapter",
+    "ultimate-roundtable",
 ]
 REQUIRED_FRONTMATTER = ["name", "description"]
 
@@ -236,8 +237,8 @@ def selftest() -> int:
     ck(len(skills) >= 12, f"收集到 {len(skills)} 个技能（要求 ≥12）")
     ck(all(s["file_count"] >= 1 for s in skills), "每个技能至少有一个文件")
     ck(all(s["description"] for s in skills), "每个技能都有 description")
-    ck(all(s["version"] == "1.1.0" for s in skills),
-       "所有技能 metadata.version 均为 1.1.0（版本一致性）")
+    ck(all(s["version"] in ("1.2.0", "2.0.0") for s in skills),
+       "技能版本只允许 1.2.0 或 2.0.0（ultimate-roundtable 按 spec 独立发版）")
     ck(all(s["skill"] in IMPORT_ORDER for s in skills), "每个技能都在导入顺序里")
     ck(len({s["skill"] for s in skills}) == len(skills), "技能名无重复")
 

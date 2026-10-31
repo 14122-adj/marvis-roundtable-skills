@@ -3,7 +3,7 @@ name: multi-model-adapter
 description: "异构基座适配层：同一底座模型的认知偏见是共通的，本技能把每个角色编译成独立的调用包（提示骨架 + 上下文 + 输出契约 + 隔离要求），交给支持多 provider 的宿主分别执行，再把结果合回同一个讨论状态。当用户要求用不同模型跑同一个圆桌、担心多角色共享同一基座而盲区一致、需要跨模型交叉验证，或 roundtable-orchestrator 要把角色分发到不同模型时，必须使用本技能。"
 license: MIT
 metadata:
-  version: 1.1.0
+  version: 1.2.0
   layer: "Layer 6 · 异构基座（可选）"
 ---
 
