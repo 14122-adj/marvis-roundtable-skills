@@ -323,10 +323,8 @@
       ],
       "expect_exit": 0,
       "stdout_contains": [
-        "终极圆桌决策报告",
-        "存活率",
-        "MEMORY_UPDATE",
-        "sparked"
+        "Ultimate Roundtable Decision Report",
+        "survival rate"
       ]
     },
     {
@@ -350,10 +348,10 @@
       "type": "artifact",
       "path": "skills/ultimate-roundtable/references/report-template.md",
       "must_contain": [
-        "核心共识与分歧底牌",
-        "击穿的隐性假设",
-        "行动指令",
-        "沙盘推演存活率评估",
+        "北极星指标与底线假设",
+        "证据链与外部验证",
+        "铁血裁决（三选一）",
+        "战术级行动清单",
         "长期记忆写入",
         "MEMORY_UPDATE"
       ],

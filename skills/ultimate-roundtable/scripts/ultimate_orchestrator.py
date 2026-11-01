@@ -105,7 +105,7 @@ def emit(obj) -> None:
 def load_state(path) -> dict:
     p = Path(path)
     if not p.exists():
-        die(f"状态文件不存在: {p}")
+        die(f"State file not found: {p}")
     return json.loads(p.read_text(encoding="utf-8"))
 
 
@@ -123,7 +123,7 @@ def read_payload(args) -> dict:
     try:
         return json.loads(raw)
     except json.JSONDecodeError as exc:
-        die(f"输入不是合法 JSON: {exc}")
+        die(f"Input is not valid JSON: {exc}")
 
 
 # --------------------------------------------------------------------------- #
@@ -177,8 +177,8 @@ def run_stage0(state: dict, payload: dict) -> dict:
     # V4 · 北极星指标：全场唯一的焦点，后续所有发言必须围绕它
     north_star = str(payload.get("north_star") or "").strip()
     if not north_star:
-        die("阶段零缺少 north_star（北极星指标）：V4 要求全场只有一个焦点指标，"
-            "例如「月活」「利润率」「存活率」", 3)
+        die("Stage 0 is missing north_star: V4 requires exactly one focus metric for the whole "
+            "session, e.g. \"MAU\" / \"profit margin\" / \"survival rate\"", 3)
 
     state["north_star"] = north_star
     state["stage0"] = {
@@ -224,9 +224,10 @@ def _check_tool_closure(role: str, text: str, tool: dict, problems: list) -> dic
 def run_stage1(state: dict, payload: dict) -> dict:
     confessions = payload.get("confessions") or []
     if not isinstance(confessions, list) or not confessions:
-        die("stage1 需要 confessions 数组（六个角色各一条）")
+        die("stage1 requires a confessions array (one entry per persona)")
     if "stage0" not in state["stages_done"]:
-        die("必须先完成阶段零（stage0）：北极星指标未锚定前不得开始交底", 3)
+        die("Stage 0 (stage0) must be completed first: no disclosure before the north-star "
+            "metric is anchored", 3)
 
     north_star = state.get("north_star") or ""
     seen, problems, demands, results = set(), [], [], []
@@ -284,7 +285,7 @@ def run_stage1(state: dict, payload: dict) -> dict:
         problems.append(f"缺少角色发言：{', '.join(missing)}")
 
     if problems:
-        die("阶段一校验失败：\n  - " + "\n  - ".join(problems), 3)
+        die("Stage 1 validation failed:\n  - " + "\n  - ".join(problems), 3)
 
     # 先把阶段一写进状态，分舱才有历史可分（顺序不能颠倒）
     state["stage1"] = {"confessions": confessions, "data_demands": demands,
@@ -317,12 +318,13 @@ def run_stage1(state: dict, payload: dict) -> dict:
 
 def run_stage2(state: dict, payload: dict) -> dict:
     if "stage1" not in state["stages_done"]:
-        die("必须先完成阶段一（stage1）", 3)
+        die("Stage 1 (stage1) must be completed first", 3)
     if state.get("debate_closed"):
-        die(f"辩论已被强制熔断（{state.get('fuse_message', FUSE_TEMPLATE)}）："
-            f"不得再提交 stage2 交锋，请直接进入阶段三铁血裁决", 3)
+        die(f"Debate was force-fused ({state.get('fuse_message', FUSE_TEMPLATE)}): "
+            f"no further stage2 exchange is allowed; go straight to the stage 3 iron verdict", 3)
     if "stage0" not in state["stages_done"]:
-        die("必须先完成阶段零（stage0）：北极星指标未锚定前不得开始对抗", 3)
+        die("Stage 0 (stage0) must be completed first: no clash before the north-star metric "
+            "is anchored", 3)
 
     camps = payload.get("camps") or {}
     blue, red = camps.get("blue") or [], camps.get("red") or []
@@ -385,7 +387,7 @@ def run_stage2(state: dict, payload: dict) -> dict:
         })
 
     if problems:
-        die("阶段二校验失败：\n  - " + "\n  - ".join(problems), 3)
+        die("Stage 2 validation failed:\n  - " + "\n  - ".join(problems), 3)
 
     state["camps"] = {"blue": blue, "red": red}
     state["clash_exchanges"] = cleaned
@@ -492,9 +494,9 @@ def _norm_cn(text: str) -> str:
 def run_stage3(state: dict, payload: dict) -> dict:
     """V4 铁血裁决：A/B/C 三选一 + 最后一轮投票（不再辩论）。"""
     if "stage2" not in state["stages_done"]:
-        die("必须先完成阶段二（红蓝对抗）", 3)
+        die("Stage 2 (red/blue clash) must be completed first", 3)
     if state.get("fused") and not state.get("debate_closed"):
-        die("熔断状态异常：debate_closed 未置位", 3)
+        die("Inconsistent fuse state: debate_closed is not set", 3)
 
     problems = []
     options = payload.get("options") or {}
@@ -524,7 +526,7 @@ def run_stage3(state: dict, payload: dict) -> dict:
         problems.append(f"缺少 decision 或取值非法（{decision!r}）：必须明确拍板 A/B/C 之一")
 
     if problems:
-        die("阶段三校验失败：\n  - " + "\n  - ".join(problems), 3)
+        die("Stage 3 validation failed:\n  - " + "\n  - ".join(problems), 3)
 
     tally = {k: sorted([r for r, v in votes.items() if v == k]) for k in OPTION_KEYS}
     top = max(tally, key=lambda k: len(tally[k]))
@@ -560,7 +562,7 @@ def run_stage3(state: dict, payload: dict) -> dict:
 
 def run_sandbox(state: dict, payload: dict) -> dict:
     if "stage2" not in state["stages_done"]:
-        die("必须先完成阶段二（且红蓝对抗必须打出火花）", 3)
+        die("Stage 2 must be completed first (and the red/blue clash must actually spark)", 3)
 
     sandbox = payload.get("sandbox") or {}
     problems = []
@@ -612,7 +614,7 @@ def run_sandbox(state: dict, payload: dict) -> dict:
             problems.append(f"第 {i} 个 tool_call 既非真实调用（source=tool）也未标 simulated=true")
 
     if problems:
-        die("阶段三校验失败：\n  - " + "\n  - ".join(problems), 3)
+        die("Stage 3 validation failed:\n  - " + "\n  - ".join(problems), 3)
 
     scenario = {
         "plan": plan_name,
@@ -681,7 +683,7 @@ def _validate_action_plan(ap: dict, problems: list) -> None:
 
 def run_stage4(state: dict, payload: dict) -> dict:
     if "stage3" not in state["stages_done"]:
-        die("必须先完成阶段三（铁血裁决）", 3)
+        die("Stage 3 (iron verdict) must be completed first", 3)
 
     meta = payload.get("meta") or payload
     problems = []
@@ -704,7 +706,7 @@ def run_stage4(state: dict, payload: dict) -> dict:
     _validate_action_plan(action_plan, problems)
 
     if problems:
-        die("阶段四校验失败：\n  - " + "\n  - ".join(problems), 3)
+        die("Stage 4 validation failed:\n  - " + "\n  - ".join(problems), 3)
 
     persist = payload.get("persist_memory", True)
     written = None
@@ -809,130 +811,136 @@ def render_report(state: dict) -> str:
     d = collect_report_data(state)
     ap = d["action_plan"] or {}
     if not d["north_star"]:
-        die("缺少北极星指标（先执行 stage0）", 3)
+        die("Missing north-star metric (run stage0 first)", 3)
     if not d["decision"]:
-        die("缺少最终拍板结论（先执行 stage3 三选一）", 3)
+        die("Missing the final decision (run the stage3 three-way choice first)", 3)
     for f in ("owner", "start", "kpi", "kill"):
         if not str(ap.get(f) or "").strip():
-            die(f"战术级行动清单缺少 {f}：V4 拒绝咨询体，必须给出可执行指令", 3)
+            die(f"Tactical action list is missing {f}: V4 rejects consultant-speak and requires an "
+            f"executable order", 3)
     if not d["memory"]:
-        die("缺少长期记忆（先执行 stage4）", 3)
+        die("Missing long-term memory (run stage4 first)", 3)
 
     sim_count = len([t for t in d["tool_results"] if t.get("simulated")])
     real_count = len([t for t in d["tool_results"] if t.get("source") == "tool"])
 
     L = []
-    L.append("### ⚔️ 终极圆桌决策报告 V4.1")
+    L.append("### ⚔️ Ultimate Roundtable Decision Report V4.1")
     L.append("")
-    L.append(f"> 议题：{d['topic']}　会话：`{d['session_id']}`")
-    L.append(f"> 外部数据：真实工具调用 {real_count} 条 / 模拟 {sim_count} 条")
+    L.append(f"> Topic: {d['topic']}　Session: `{d['session_id']}`")
+    L.append(f"> External data: {real_count} real tool calls / {sim_count} simulated")
     if d["opening_line"]:
         L.append(f"> {d['opening_line']}")
     L.append("")
 
     # ---- 1. 北极星与底线假设 ----
-    L.append("#### 📌 1. 北极星指标与底线假设")
-    L.append(f"- 本次推演的核心指标：**{d['north_star']}**")
+    L.append("#### 📌 1. North-star metric and baseline assumptions")
+    L.append(f"- Core metric of this run: **{d['north_star']}**")
     if d["shared_hidden_assumption"]:
-        L.append(f"- 我们击穿的隐性假设：**{d['shared_hidden_assumption']}**")
+        L.append(f"- Hidden assumption we broke: **{d['shared_hidden_assumption']}**")
     for item in d["assumption_broken"]:
-        L.append(f"- 底线假设被推翻：一开始默认了 {item}，交锋证明这是错的。")
+        L.append(f"- Baseline assumption overturned: we assumed {item} from the start, "
+                     f"but the clash proved it wrong.")
     if d["ignored_dimension"]:
-        L.append(f"- 被忽略的成本维度：{d['ignored_dimension']}")
+        L.append(f"- Cost dimension we ignored: {d['ignored_dimension']}")
     L.append("")
 
     # ---- 2. 证据链 ----
-    L.append("#### 🔗 2. 证据链与外部验证")
+    L.append("#### 🔗 2. Evidence chain and external verification")
     if not d["tool_results"] and not d["sandbox_tools"]:
-        L.append("- （本次未引入任何外部数据：按 V4 纪律，这样的会议不应产出决策报告）")
+        L.append("- (No external data was introduced: under V4 discipline such a session "
+                 "should not produce a decision report)")
     for i, t in enumerate(d["tool_results"], 1):
-        kind = "真实工具" if t.get("source") == "tool" else "模拟"
+        kind = "real tool" if t.get("source") == "tool" else "simulated"
         calls = t.get("tool_calls") or []
-        call_desc = "；".join(f"[{c['kind']}] {c['detail']}" for c in calls) or "未标注 Tool Call"
-        L.append(f"- 数据 {i}（{t.get('role')}，来源：{kind}）：{t.get('query', '') or '—'}")
-        L.append(f"  - 调用：{call_desc}")
-        L.append(f"  - 结果：{str(t.get('result', ''))[:160]}")
+        call_desc = "; ".join(f"[{c['kind']}] {c['detail']}" for c in calls) or "no Tool Call recorded"
+        L.append(f"- Data {i} ({t.get('role')}, source: {kind}): {t.get('query', '') or '—'}")
+        L.append(f"  - Call: {call_desc}")
+        L.append(f"  - Result: {str(t.get('result', ''))[:160]}")
     for i, t in enumerate(d["sandbox_tools"], 1):
-        kind = "真实" if t.get("source") == "tool" else "模拟"
-        L.append(f"- 工具验证 {i}（{kind}·{t.get('kind', '')}）：{t.get('purpose', '')}")
-        L.append(f"  - 运行结果：{str(t.get('result', ''))[:200]}")
+        kind = "real" if t.get("source") == "tool" else "simulated"
+        L.append(f"- Tool verification {i} ({kind}·{t.get('kind', '')}): {t.get('purpose', '')}")
+        L.append(f"  - Run result: {str(t.get('result', ''))[:200]}")
     if d["verifications"]:
-        L.append(f"- **打断并验真 {len(d['verifications'])} 次**：")
+        L.append(f"- **Interrupt-and-verify, {len(d['verifications'])} time(s)**:")
         for v in d["verifications"]:
-            L.append(f"  - {v.get('from')} 对 {v.get('target_claim') or '（未指定靶点）'} → "
-                     f"{v.get('verdict')}：{str(v.get('result', ''))[:120]}")
+            L.append(f"  - {v.get('from')} on {v.get('target_claim') or '(no target specified)'} → "
+                     f"{v.get('verdict')}: {str(v.get('result', ''))[:120]}")
     L.append("")
 
     # ---- 3. 铁血裁决 ----
-    L.append("#### 🚦 3. 铁血裁决（三选一）")
+    L.append("#### 🚦 3. Iron verdict (one of three)")
     tally = d["tally"]
     for k in OPTION_KEYS:
         opt = d["options"].get(k) or {}
         supporters = tally.get(k) or []
-        L.append(f"- **{OPTION_LABELS[k]}**：{opt.get('summary', '（未提供）')}"
-                 f"（投票支持：{'、'.join(supporters) if supporters else '无'}）")
+        L.append(f"- **{OPTION_LABELS[k]}**: {opt.get('summary', '(not provided)')}"
+                 f" (votes: {', '.join(supporters) if supporters else 'none'})")
         if opt.get("kind"):
-            L.append(f"  - 定位：{opt['kind']}")
-    L.append(f"- 🏆 **最终拍板结论**：采用方案 {d['decision']}")
+            L.append(f"  - Positioning: {opt['kind']}")
+    L.append(f"- 🏆 **Final decision**: adopt option {d['decision']}")
     if d["decision_reason"]:
-        L.append(f"  - 拍板理由：{d['decision_reason']}")
+        L.append(f"  - Reason: {d['decision_reason']}")
     if d["fused"]:
-        L.append(f"  - 熔断记录：{d['fuse_message']}")
+        L.append(f"  - Fuse record: {d['fuse_message']}")
     L.append("")
 
     # ---- 4. 战术级行动清单 ----
-    L.append("#### 🎯 4. 战术级行动清单 (Action Items)")
-    L.append(f"- **负责人**：{ap.get('owner', '')}")
-    L.append(f"- **第一步（Start）**：{ap.get('start', '')}")
-    L.append(f"- **关键指标（KPI）**：{ap.get('kpi', '')}")
-    L.append(f"- **止损红线（Kill）**：{ap.get('kill', '')}")
+    L.append("#### 🎯 4. Tactical action items")
+    L.append(f"- **Owner**: {ap.get('owner', '')}")
+    L.append(f"- **Start**: {ap.get('start', '')}")
+    L.append(f"- **KPI**: {ap.get('kpi', '')}")
+    L.append(f"- **Kill-switch**: {ap.get('kill', '')}")
     need = ap.get("need_info") or []
-    L.append(f"- **补充调研（Need Info）**：{'；'.join(need) if need else '（无）'}")
+    L.append(f"- **Need info**: {'; '.join(need) if need else '(none)'}")
     L.append("")
 
     # ---- 5. 长期记忆 ----
-    L.append("#### 🧠 5. 长期记忆写入")
-    L.append(f"- `[MEMORY_UPDATE]`：{d['memory']}")
+    L.append("#### 🧠 5. Long-term memory write")
+    L.append(f"- `[MEMORY_UPDATE]`: {d['memory']}")
     if d["memory_written"]:
         entry = d["memory_entry"] or {}
-        L.append(f"  - 已写入记忆库：`{entry.get('id', '')}`（{entry.get('chars', 0)} 字）")
+        L.append(f"  - Written to the memory store: `{entry.get('id', '')}` "
+                     f"({entry.get('chars', 0)} chars)")
     else:
-        L.append("  - ⚠ 未写入记忆库（本次以 persist_memory=false 运行，仅用于测试）")
+        L.append("  - ⚠ Not written to the memory store (this run used persist_memory=false, "
+                 "for testing only)")
     L.append("")
     L.append("---")
     L.append("")
-    L.append("**过程留痕（不属于报告正文）**")
+    L.append("**Process trace (not part of the report body)**")
     L.append("")
-    L.append(f"- 阶段一数据诉求 {len(d['data_demands'])} 条：")
+    L.append(f"- Stage 1 data demands, {len(d['data_demands'])} item(s):")
     L.extend([f"  - [{x['role']}] {x['demand']}" for x in d["data_demands"]])
     camps = d["camps"]
-    L.append(f"- 红蓝分组：蓝军 {camps.get('blue', [])} ｜ 红军 {camps.get('red', [])}")
+    L.append(f"- Red/blue split: blue {camps.get('blue', [])} | red {camps.get('red', [])}")
     sp = d["spark"]
-    L.append(f"- 对抗火花：攻击 {sp.get('attack_count')} / 防御 {sp.get('defense_count')} / "
-             f"靶点 {sp.get('target_spread')} / 空洞发言 {sp.get('hollow_count')} → "
+    L.append(f"- Clash spark: attack {sp.get('attack_count')} / defense {sp.get('defense_count')} / "
+             f"targets {sp.get('target_spread')} / hollow {sp.get('hollow_count')} → "
              f"**{sp.get('verdict', 'unknown')}**")
     dl = d["deadlock"] or {}
     if dl:
-        L.append(f"- 死锁检测：连续停滞 {dl.get('consecutive_stalled', 0)} 轮 → "
-                 f"{'已熔断' if d['fused'] else '未熔断'}")
+        L.append(f"- Deadlock check: {dl.get('consecutive_stalled', 0)} consecutive stalled round(s) → "
+                 f"{'fused' if d['fused'] else 'not fused'}")
     splits = d["attention_splits"] or []
     if splits:
-        L.append("- 注意力分舱：")
+        L.append("- Attention compartmentalisation:")
         for s in splits:
-            L.append(f"  - {s.get('role')}（{s.get('lens')}）："
-                     f"可见 {len(s.get('visible') or [])} 条，屏蔽 {len(s.get('muted') or [])} 条")
+            L.append(f"  - {s.get('role')} ({s.get('lens')}): "
+                     f"visible {len(s.get('visible') or [])}, muted {len(s.get('muted') or [])}")
     if d["low_confidence"]:
-        L.append(f"- 低置信度发言：{[x.get('role') for x in d['low_confidence']]}")
+        L.append(f"- Low-confidence statements: {[x.get('role') for x in d['low_confidence']]}")
     if d["survival_rate"] is not None:
-        L.append(f"- 沙盘存活率（参考）：{d['survival_rate']}%")
+        L.append(f"- Sandbox survival rate (reference): {d['survival_rate']}%")
     if d["summons"]:
-        L.append(f"- 动态召唤：{', '.join(s.get('role', '') for s in d['summons'])}")
-    L.append(f"- 历史记忆加载：{len(d['memory_loaded'])} 条")
+        L.append(f"- Dynamic summons: {', '.join(s.get('role', '') for s in d['summons'])}")
+    L.append(f"- Historical memory loaded: {len(d['memory_loaded'])} item(s)")
 
     md = "\n".join(L)
     bad = [p for p in FORBIDDEN_PHRASES + CONSULTANT_PHRASES if p in md]
     if bad:
-        die(f"报告含禁止措辞 {bad}（V4 禁止和稀泥与咨询体：一方面/另一方面/视具体情况而定）", 3)
+        die(f"The report contains banned wording {bad} (V4 forbids fence-sitting and "
+            f"consultant-speak)", 3)
     return md
 
 
@@ -1436,15 +1444,15 @@ def selftest() -> int:
 
         # ---- 报告 ----
         md = render_report(st)
-        for sec in ["### ⚔️ 终极圆桌决策报告 V4.1",
-                    "#### 📌 1. 北极星指标与底线假设",
-                    "#### 🔗 2. 证据链与外部验证",
-                    "#### 🚦 3. 铁血裁决（三选一）",
-                    "#### 🎯 4. 战术级行动清单 (Action Items)",
-                    "#### 🧠 5. 长期记忆写入"]:
+        for sec in ["### ⚔️ Ultimate Roundtable Decision Report V4.1",
+                    "#### 📌 1. North-star metric and baseline assumptions",
+                    "#### 🔗 2. Evidence chain and external verification",
+                    "#### 🚦 3. Iron verdict (one of three)",
+                    "#### 🎯 4. Tactical action items",
+                    "#### 🧠 5. Long-term memory write"]:
             ck(sec in md, f"报告含 V4 章节 {sec}")
-        ck("🏆 **最终拍板结论**：采用方案 C" in md, "报告写明最终拍板")
-        for label in ("**负责人**", "第一步（Start）", "关键指标（KPI）", "止损红线（Kill）"):
+        ck("🏆 **Final decision**: adopt option C" in md, "报告写明最终拍板")
+        for label in ("**Owner**", "**Start**", "**KPI**", "**Kill-switch**"):
             ck(label in md, f"报告含战术清单项 {label}")
         ck("[MEMORY_UPDATE]" in md, "包含 MEMORY_UPDATE")
         ck(not any(p in md for p in FORBIDDEN_PHRASES + CONSULTANT_PHRASES),
@@ -1489,7 +1497,7 @@ def selftest() -> int:
         out_md = Path(td) / "report.md"
         with contextlib.redirect_stdout(io.StringIO()):
             main(["report", "--state", str(cli_state), "--out", str(out_md)])
-        ck(out_md.exists() and "终极圆桌决策报告 V4.1" in out_md.read_text(encoding="utf-8"),
+        ck(out_md.exists() and "Ultimate Roundtable Decision Report V4.1" in out_md.read_text(encoding="utf-8"),
            "CLI report 生成 V4 报告文件")
 
     print("selftest OK" if ok else "selftest FAILED", file=sys.stderr)

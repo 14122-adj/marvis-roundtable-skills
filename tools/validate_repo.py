@@ -34,7 +34,7 @@ CORE_SKILLS = ["roundtable-orchestrator", "meta-supervisor", "position-evolution
                "ultimate-roundtable", "host-bootstrap"]
 ROLE_SKILLS = ["role-musk", "role-feynman", "role-munger", "role-jobs", "role-karpathy", "role-pg"]
 ALL_SKILLS = CORE_SKILLS + ROLE_SKILLS
-EXPECTED_VERSION = "1.7.0"
+EXPECTED_VERSION = "1.8.1"
 # 版本例外：这两个技能按上游 spec 独立发版，不参与统一版本对齐
 VERSION_OVERRIDES = {"ultimate-roundtable": "4.1.0", "host-bootstrap": "3.0.0"}
 

@@ -141,15 +141,26 @@ def recall(path: Path, limit: int = 5, query: str = "", tags=None,
     return items[:limit]
 
 
+def _lang() -> str:
+    """输出语言。默认 zh（保持既有行为），设置 ULTIMATE_LANG=en 切英文。"""
+    return "en" if os.environ.get("ULTIMATE_LANG", "").lower().startswith("en") else "zh"
+
+
 def intro(path: Path, limit: int = 3) -> str:
     items = recall(path, limit=limit)
+    en = _lang() == "en"
     if not items:
+        if en:
+            return ("[Session start] loaded historical memory: no records "
+                    "(this is the first run on this topic)")
         return "[会议启动] 已加载历史记忆：无记忆记录（这是本议题的第一次推演）"
     bullets = []
     for i, e in enumerate(items, 1):
         when = e.get("created_at", "")[:10]
         bullets.append(f"{i}. [{when}] {e.get('text', '')}")
-    return "[会议启动] 已加载历史记忆：" + " ｜ ".join(bullets)
+    head = "[Session start] loaded historical memory: " if en else "[会议启动] 已加载历史记忆："
+    sep = " | " if en else " ｜ "
+    return head + sep.join(bullets)
 
 
 def stats(path: Path) -> dict:

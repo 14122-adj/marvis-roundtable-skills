@@ -472,8 +472,89 @@ def _skill_tree_impl(d: Path) -> str:
                 for f in files[:6]:
                     lines.append(f"│   └── {f}")
                 if len(files) > 6:
-                    lines.append(f"│   └── …（共 {len(files)} 个）")
+                    lines.append(f"│   └── … ({len(files)} files total)")
     return "\n".join(lines) + ("\n" if lines else "")
+
+
+# English flagship README for the marketplace bundle
+MARKET_README_TEMPLATE_EN = """# {title}
+
+{description}
+
+---
+
+## Why this is not another "role-play" skill
+
+Most multi-agent discussion skills produce six memos that compliment each other — nobody is forced
+to prove anything, and nothing gets decided.
+
+This one makes six personas **cross-examine each other**, and allows exactly one ending: **a decision**.
+
+**The four things that actually do the work**
+
+1. **No more role-play** — every persona runs a forced thinking protocol, not a costume.
+   Musk must decompose to physical constraints and give a magnitude estimate; Feynman must explain it
+   to a layman or mark it "not understood"; Munger must invert first ("how would I guarantee this
+   fails?"); Jobs must answer "is this simpler or more complex?"; Karpathy must make every claim
+   reproducible; Paul Graham must start from a real case. Vague statements are rejected **at
+   validation time**, not left for later.
+
+2. **Deadlock breaker** — built-in semantic deadlock detection. When two sides are merely
+   **paraphrasing** each other (same argument, different words, different examples), the system cuts
+   the debate and forces the verdict stage. Verbatim repetition is easy to catch; **paraphrase is the
+   hard case**, and that is what this detects.
+
+3. **Actionable outputs, not a summary** — the run ends in three things:
+   three mutually exclusive options (aggressive / conservative / orthogonal), a forced vote from all
+   six, and one decision. Then an order sheet: a named owner, the first step, **a KPI containing a
+   number**, and **a kill-switch containing a number**. Writing "stop if results are bad" is rejected
+   by the validator — vagueness is a build error.
+
+4. **Zero friction** — one-command quickstart and an interactive wizard are included.
+   `python tools/quickstart.py`: health check → a full roundtable → self-test → next steps, about
+   10 seconds, no config, no API key, no dependencies.
+   `python tools/wizard.py`: walks you through your own topic and generates all five stage files with
+   **live validation**.
+
+---
+
+## Install
+
+Drop this folder into your agent's skills directory:
+
+| Client | Target location |
+|---|---|
+| Claude Code | `~/.claude/skills/{name}/` |
+| Cursor / Cline / Windsurf | `<project>/skills/{name}/` |
+| Marvis | Skills → Import → select `SKILL.md` |
+| Anything that reads AGENTS.md | `<project>/skills/{name}/` |
+
+Then say:
+
+> {trigger_example}
+
+**If your host does not support ZIP import**: clone the GitHub repo and run
+`python tools/quickstart.py`. It takes 30 seconds.
+
+---
+
+## What is inside
+
+```
+{name}/
+├── SKILL.md          ← the skill itself (this is what your agent reads)
+{extra_tree}```
+
+---
+
+## Notes
+
+{notes}
+
+Requires Python 3.9+. Standard library only — nothing to install.
+
+License: MIT.
+"""
 
 
 # 非旗舰技能用精简版 README：讲清用途与装法即可，不套用旗舰的卖点长文
@@ -483,93 +564,155 @@ MARKET_README_LITE = """# {title}
 
 ---
 
-## 装法
+## Install
 
-把本目录整个放进你 AI 客户端的 skills 目录：
+Drop this folder into your agent's skills directory:
 
-| 客户端 | 目标位置 |
+| Client | Target location |
 |---|---|
 | Claude Code | `~/.claude/skills/{name}/` |
-| Cursor / Cline / Windsurf | 项目内 `skills/{name}/` |
-| 马维斯 Marvis | 技能管理 → 导入技能 → 选本目录的 `SKILL.md` |
-| 其他（读 AGENTS.md 的） | 放进 `skills/{name}/` |
+| Cursor / Cline / Windsurf | `<project>/skills/{name}/` |
+| Marvis | Skills → Import → select `SKILL.md` |
+| Anything that reads AGENTS.md | `<project>/skills/{name}/` |
 
-装好后对它说：
+Then say:
 
 > {trigger_example}
 
-**如果你的宿主不支持 ZIP 导入**：克隆 GitHub 仓库后跑 `python tools/quickstart.py`，
-30 秒即可。
+**If your host does not support ZIP import**: clone the GitHub repo and run
+`python tools/quickstart.py`. It takes 30 seconds.
 
 ---
 
-## 里面有什么
+## What is inside
 
 ```
 {name}/
-├── SKILL.md          ← 技能本体（agent 读这个）
+├── SKILL.md          ← the skill itself (this is what your agent reads)
 {extra_tree}```
 
 ---
 
-## 说明
+## Notes
 
 {notes}
 
-需要 Python 3.9+，仅用标准库，不需要安装任何依赖。
+Requires Python 3.9+. Standard library only — nothing to install.
 
-许可：MIT。
+License: MIT.
 """
 
 
-def build_market(version: str, out_dir: Path, only: str = None) -> dict:
-    """为每个技能打一个符合市场规范的单技能 ZIP。"""
+def collect_en_files(src: Path) -> list:
+    """英文版文件：SKILL.en.md + references/*.en.md。
+
+    约定：`X.en.md` 是 `X.md` 的英文版。打包英文包时用它替换中文原文件，
+    但**文件名改回 `X.md`**——因为 agent 只认 SKILL.md / references/X.md。
+    """
+    out = []
+    skill_en = src / "SKILL.en.md"
+    if skill_en.is_file():
+        out.append((skill_en, "SKILL.md"))
+    refs = src / "references"
+    if refs.is_dir():
+        for p in sorted(refs.glob("*.en.md")):
+            out.append((p, f"references/{p.name[:-len('.en.md')]}.md"))
+    return out
+
+
+def build_market(version: str, out_dir: Path, only: str = None,
+                 lang: str = "zh") -> dict:
+    """为每个技能打一个符合市场规范的单技能 ZIP。
+
+    lang="en" 时用 *.en.md 替换对应中文文件（文件名仍是 SKILL.md / references/X.md）。
+    """
     skills = collect_skills()
     if only:
         skills = [s for s in skills if s["skill"] == only]
         if not skills:
             die(f"找不到技能：{only}")
 
-    market_dir = out_dir / "market"
+    market_dir = out_dir / ("market-en" if lang == "en" else "market")
     market_dir.mkdir(parents=True, exist_ok=True)
 
     made = []
     for s in skills:
         name = s["skill"]
         src = ROOT / "skills" / name
-        zip_path = market_dir / f"{name}-v{version}.zip"
+        suffix = "-en" if lang == "en" else ""
+        zip_path = market_dir / f"{name}-v{version}{suffix}.zip"
 
         title = f"{name}"
-        desc = s["description"]
-        trigger = ("用它开始一场终极圆桌讨论"
-                   if name == "ultimate-roundtable" else
-                   "让这个技能参与你的圆桌讨论")
+        if lang == "en":
+            en_skill = src / "SKILL.en.md"
+            desc = s["description"]
+            if en_skill.is_file():
+                import yaml as _yaml
+                _fm = _yaml.safe_load(en_skill.read_text(encoding="utf-8").split("---", 2)[1]) or {}
+                desc = str(_fm.get("description", desc)).strip()
+            trigger = ("Open an ultimate roundtable on a decision you are stuck on"
+                       if name == "ultimate-roundtable" else
+                       "Let this skill take part in your roundtable")
+        else:
+            desc = s["description"]
+            trigger = ("用它开始一场终极圆桌讨论"
+                       if name == "ultimate-roundtable" else
+                       "让这个技能参与你的圆桌讨论")
 
         # 只有旗舰技能用完整卖点页；其余用精简版，避免"套模板"的违和感
-        template = (MARKET_README_TEMPLATE if name == "ultimate-roundtable"
-                    else MARKET_README_LITE)
+        if lang == "en":
+            template = (MARKET_README_TEMPLATE_EN if name == "ultimate-roundtable"
+                        else MARKET_README_LITE)
+        else:
+            template = (MARKET_README_TEMPLATE if name == "ultimate-roundtable"
+                        else MARKET_README_LITE)
+        notes = ("This skill is part of the roundtable family but works standalone; "
+                 "see the repo README for the companion skills.\n"
+                 "Scripts use the Python standard library only — no dependencies to install."
+                 if lang == "en" else
+                 "本技能是圆桌讨论体系的一部分，单独使用也可以；"
+                 "配套技能见仓库 README。\n"
+                 "脚本仅用 Python 标准库，不需要安装依赖。")
         readme = template.format(
             title=title, description=desc, name=name,
             trigger_example=trigger,
             extra_tree=_skill_tree(src),
-            notes=("本技能是圆桌讨论体系的一部分，单独使用也可以；"
-                   "配套技能见仓库 README。\n"
-                   "脚本仅用 Python 标准库，不需要安装依赖。"))
+            notes=notes)
 
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
-            # 单层顶层文件夹，SKILL.md 在其根部
-            z.write(src / "SKILL.md", f"{name}/SKILL.md")
-            z.writestr(f"{name}/README.md", readme)
-            for rel in s["files"]:
-                if rel.endswith("SKILL.md"):
-                    continue
-                z.write(ROOT / rel, f"{name}/{Path(rel).relative_to('skills/' + name).as_posix()}")
+            if lang == "en":
+                # 英文包：用 *.en.md 覆盖，但文件名写回 SKILL.md / references/X.md
+                en_files = collect_en_files(src)
+                if not en_files:
+                    die(f"{name} 没有英文版文件（SKILL.en.md），无法打英文包")
+                written = set()
+                for src_p, arc in en_files:
+                    z.write(src_p, f"{name}/{arc}")
+                    written.add(arc)
+                z.writestr(f"{name}/README.md", readme)
+                # 英文包里剩下的（脚本、无英文版的 references）仍用中文原件
+                for rel in s["files"]:
+                    arc = Path(rel).relative_to("skills/" + name).as_posix()
+                    if arc in written or arc.endswith(".en.md"):
+                        continue
+                    if arc == "SKILL.md":
+                        continue
+                    z.write(ROOT / rel, f"{name}/{arc}")
+            else:
+                # 单层顶层文件夹，SKILL.md 在其根部
+                z.write(src / "SKILL.md", f"{name}/SKILL.md")
+                z.writestr(f"{name}/README.md", readme)
+                for rel in s["files"]:
+                    if rel.endswith("SKILL.md") or rel.endswith(".en.md"):
+                        continue
+                    z.write(ROOT / rel, f"{name}/{Path(rel).relative_to('skills/' + name).as_posix()}")
 
         made.append({"skill": name, "zip": str(zip_path),
                      "size_kb": round(zip_path.stat().st_size / 1024, 1),
                      "sha256": sha256_of(zip_path)})
 
-    return {"market_dir": str(market_dir), "count": len(made), "bundles": made}
+    return {"market_dir": str(market_dir), "count": len(made),
+            "lang": lang, "bundles": made}
 
 
 def verify_market(zip_path: Path) -> dict:
@@ -623,8 +766,8 @@ def selftest() -> int:
     ck(len(skills) >= 12, f"收集到 {len(skills)} 个技能（要求 ≥12）")
     ck(all(s["file_count"] >= 1 for s in skills), "每个技能至少有一个文件")
     ck(all(s["description"] for s in skills), "每个技能都有 description")
-    ck(all(s["version"] in ("1.7.0", "3.0.0", "4.1.0") for s in skills),
-       "技能版本只允许 1.7.0 / 3.0.0 / 4.1.0（ultimate 与 host-bootstrap 按 spec 独立发版）")
+    ck(all(s["version"] in ("1.8.1", "3.0.0", "4.1.0") for s in skills),
+       "技能版本只允许 1.8.1 / 3.0.0 / 4.1.0（ultimate 与 host-bootstrap 按 spec 独立发版）")
     ck(all(s["skill"] in IMPORT_ORDER for s in skills), "每个技能都在导入顺序里")
     ck(len({s["skill"] for s in skills}) == len(skills), "技能名无重复")
 
@@ -668,6 +811,8 @@ def main(argv=None) -> int:
     pb.add_argument("--per-skill", action="store_true")
     pb.add_argument("--market", action="store_true",
                     help="额外产出符合市场规范的单技能 ZIP（Agensi / Claude Skills）")
+    pb.add_argument("--lang", default="zh", choices=["zh", "en"],
+                    help="市场包语言：en 用 *.en.md 替换中文原文件")
     pb.add_argument("--only", help="只打包某一个技能（配合 --market）")
 
     pv = sub.add_parser("verify")
@@ -677,6 +822,7 @@ def main(argv=None) -> int:
     pm = sub.add_parser("market", help="只产出市场单技能 ZIP")
     pm.add_argument("--version", default="1.7.0")
     pm.add_argument("--out", default="dist")
+    pm.add_argument("--lang", default="zh", choices=["zh", "en"])
     pm.add_argument("--only")
 
     pvm = sub.add_parser("verify-market", help="校验 dist/market/ 下全部单技能 ZIP")
@@ -689,7 +835,7 @@ def main(argv=None) -> int:
         out = (ROOT / args.out).resolve()
         res = build(args.version, out, args.per_skill)
         if args.market or args.only:
-            res["market"] = build_market(args.version, out, args.only)
+            res["market"] = build_market(args.version, out, args.only, args.lang)
         print(json.dumps(res, ensure_ascii=False, indent=2))
         return 0
     if args.cmd == "verify":
@@ -699,7 +845,8 @@ def main(argv=None) -> int:
             return 0 if r["ok"] else 1
         return verify(Path(args.zip))
     if args.cmd == "market":
-        res = build_market(args.version, (ROOT / args.out).resolve(), args.only)
+        res = build_market(args.version, (ROOT / args.out).resolve(),
+                           args.only, args.lang)
         print(json.dumps(res, ensure_ascii=False, indent=2))
         return 0
     if args.cmd == "verify-market":
