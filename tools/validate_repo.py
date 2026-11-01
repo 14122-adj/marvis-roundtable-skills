@@ -119,6 +119,8 @@ ROOT_FILES = [
     "tools/quickstart.py", "tools/wizard.py",
     "tools/demo_session.py", "tools/demo_ultimate.py",
     "tools/run_evals.py", "tools/package_bundle.py", "evals/evals.json",
+    "assets/icon-512.png", "assets/screenshots/README.md",
+    "assets/screenshots/01-quickstart-zh.png", "assets/screenshots/03-verdict-en.png",
 ]
 
 COMMUNITY_FILES = [
