@@ -1,0 +1,70 @@
+{
+  "confessions": [
+    {
+      "role": "musk",
+      "text": "月活 是核心约束。[数据诉求: 需要基准数据] [Tool Call: Search] 关键词：基准数据。基于此数据，我的观点是：先补数据再谈方案。",
+      "tool_result": {
+        "source": "text",
+        "simulated": true,
+        "tool": "simulated_search",
+        "query": "基准数据",
+        "result": "（模拟数据）示例返回值"
+      }
+    },
+    {
+      "role": "feynman",
+      "text": "月活 是核心约束。[数据诉求: 需要基准数据] [Tool Call: Search] 关键词：基准数据。基于此数据，我的观点是：先补数据再谈方案。",
+      "tool_result": {
+        "source": "text",
+        "simulated": true,
+        "tool": "simulated_search",
+        "query": "基准数据",
+        "result": "（模拟数据）示例返回值"
+      }
+    },
+    {
+      "role": "munger",
+      "text": "月活 是核心约束。[数据诉求: 需要基准数据] [Tool Call: Search] 关键词：基准数据。基于此数据，我的观点是：先补数据再谈方案。",
+      "tool_result": {
+        "source": "text",
+        "simulated": true,
+        "tool": "simulated_search",
+        "query": "基准数据",
+        "result": "（模拟数据）示例返回值"
+      }
+    },
+    {
+      "role": "jobs",
+      "text": "月活 是核心约束。[数据诉求: 需要基准数据] [Tool Call: Search] 关键词：基准数据。基于此数据，我的观点是：先补数据再谈方案。",
+      "tool_result": {
+        "source": "text",
+        "simulated": true,
+        "tool": "simulated_search",
+        "query": "基准数据",
+        "result": "（模拟数据）示例返回值"
+      }
+    },
+    {
+      "role": "karpathy",
+      "text": "月活 是核心约束。[数据诉求: 需要基准数据] [Tool Call: Search] 关键词：基准数据。基于此数据，我的观点是：先补数据再谈方案。",
+      "tool_result": {
+        "source": "text",
+        "simulated": true,
+        "tool": "simulated_search",
+        "query": "基准数据",
+        "result": "（模拟数据）示例返回值"
+      }
+    },
+    {
+      "role": "pg",
+      "text": "月活 是核心约束。[数据诉求: 需要基准数据] [Tool Call: Search] 关键词：基准数据。基于此数据，我的观点是：先补数据再谈方案。",
+      "tool_result": {
+        "source": "text",
+        "simulated": true,
+        "tool": "simulated_search",
+        "query": "基准数据",
+        "result": "（模拟数据）示例返回值"
+      }
+    }
+  ]
+}

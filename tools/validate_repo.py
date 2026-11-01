@@ -34,7 +34,7 @@ CORE_SKILLS = ["roundtable-orchestrator", "meta-supervisor", "position-evolution
                "ultimate-roundtable", "host-bootstrap"]
 ROLE_SKILLS = ["role-musk", "role-feynman", "role-munger", "role-jobs", "role-karpathy", "role-pg"]
 ALL_SKILLS = CORE_SKILLS + ROLE_SKILLS
-EXPECTED_VERSION = "1.6.0"
+EXPECTED_VERSION = "1.7.0"
 # 版本例外：这两个技能按上游 spec 独立发版，不参与统一版本对齐
 VERSION_OVERRIDES = {"ultimate-roundtable": "4.1.0", "host-bootstrap": "3.0.0"}
 
@@ -113,9 +113,10 @@ SCRIPTS = [
 
 ROOT_FILES = [
     "README.md", "LICENSE", "CHANGELOG.md", ".gitignore",
-    "AGENTS.md", "CLAUDE.md", "CONTRIBUTING.md",
+    "AGENTS.md", "CLAUDE.md", "CONTRIBUTING.md", "QUICKSTART.md",
     "docs/output-contract.md", "docs/example-session.md",
     "tools/validate_repo.py", "tools/validate_role.py",
+    "tools/quickstart.py", "tools/wizard.py",
     "tools/demo_session.py", "tools/demo_ultimate.py",
     "tools/run_evals.py", "tools/package_bundle.py", "evals/evals.json",
 ]
@@ -125,6 +126,16 @@ COMMUNITY_FILES = [
     "community-roles/role-civilian/references/plain-user-checklist.md",
     "community-roles/role-contrarian/SKILL.md",
     "community-roles/role-contrarian/references/assumption-attack-guide.md",
+]
+
+# 阶段配置模板：必须齐全，否则 quickstart 提示的 templates/ 目录会误导用户
+TEMPLATE_FILES = [
+    "templates/README.md",
+    "templates/stage0.json",
+    "templates/stage1.json",
+    "templates/stage2.json",
+    "templates/stage3.json",
+    "templates/stage4.json",
 ]
 
 # 禁用写法：命中后还要看是否处在"否定语境"里（如"禁止出现本轮必须一对一轮流"）
@@ -172,6 +183,8 @@ def main() -> int:
     for rel in ROOT_FILES:
         check("结构", rel, (ROOT / rel).is_file())
     for rel in COMMUNITY_FILES:
+        check("结构", rel, (ROOT / rel).is_file())
+    for rel in TEMPLATE_FILES:
         check("结构", rel, (ROOT / rel).is_file())
     for skill in ALL_SKILLS:
         d = SKILLS / skill
@@ -273,6 +286,15 @@ def main() -> int:
             proc = subprocess.run([sys.executable, str(p), "selftest"],
                                   capture_output=True, text=True, encoding="utf-8", errors="replace")
             check("脚本自检", rel, proc.returncode == 0,
+                  (proc.stderr or "")[-200:] if proc.returncode != 0 else "")
+
+        # 向导自检（tools 下，独立于 skills/scripts）
+        wiz = ROOT / "tools" / "wizard.py"
+        if wiz.is_file():
+            proc = subprocess.run([sys.executable, str(wiz), "--selftest"],
+                                  capture_output=True, text=True,
+                                  encoding="utf-8", errors="replace")
+            check("脚本自检", "tools/wizard.py", proc.returncode == 0,
                   (proc.stderr or "")[-200:] if proc.returncode != 0 else "")
 
     # 汇总

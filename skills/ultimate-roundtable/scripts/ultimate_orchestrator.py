@@ -473,8 +473,10 @@ def _validate_options(options: dict, problems: list) -> None:
         elif len(desc) > 120:
             problems.append(f"方案 {k} 的 summary 超过 120 字：V4 要求一句话说清")
         texts.append(_norm_cn(desc))
+        # kind 可由 OPTION_DEFS 自动补齐：它是展示用的固定标签，不是用户的判断。
+        # 缺了就补，不因此拒绝——真正该拒绝的是 summary 为空或三方案换皮。
         if not opt.get("kind"):
-            problems.append(f"方案 {k} 缺少 kind（应为 {OPTION_DEFS[k]}）")
+            opt["kind"] = OPTION_DEFS[k]
     # 互斥性：三个方案不能是同一句话的复读
     for i in range(len(texts)):
         for j in range(i + 1, len(texts)):

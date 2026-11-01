@@ -4,10 +4,25 @@
 
 一句话：**讨论机制从角色提示词里抽出来交给编排层；角色只负责自己的思维协议。**
 
-- 版本：**v1.6.0**（P0–P10）；`ultimate-roundtable` **v4.1.0**、`host-bootstrap` **v3.0.0** 按上游 spec 独立发版
-- 形态：**14 个核心技能** ＋ **2 个社区角色**（`community-roles/`）＋ **16 个零依赖 Python 脚本**（全部带 `--selftest`）
+## 30 秒跑通
+
+```bash
+git clone https://github.com/14122-adj/marvis-roundtable-skills.git
+cd marvis-roundtable-skills
+python tools/quickstart.py
+```
+
+体检 → 跑一场完整终极圆桌 → 自检 → 告诉你下一步。约 10 秒，产物在 `.quickstart/`。
+
+换成你自己的议题：`python tools/wizard.py`（交互式，替你生成 5 个阶段的配置）。
+详细路径见 **[QUICKSTART.md](QUICKSTART.md)**。
+
+---
+
+- 版本：**v1.7.0**（P0–P11）；`ultimate-roundtable` **v4.1.0**、`host-bootstrap` **v3.0.0** 按上游 spec 独立发版
+- 形态：**14 个核心技能** ＋ **2 个社区角色**（`community-roles/`）＋ **18 个零依赖 Python 脚本**（全部带 `--selftest`）
 - 跨宿主：马维斯 / **Claude Code** / **Codex (ChatGPT)** / **Hermes** / Cursor / 纯文本对话
-- 验收：`tools/validate_repo.py` 117 项、`tools/run_evals.py` 36 条离线评测、两套端到端 demo
+- 验收：`tools/validate_repo.py` 121 项、`tools/run_evals.py` 36 条离线评测、两套端到端 demo
 - 语言：中文正文，字段名英文
 
 > **欢迎贡献角色**：六个人覆盖不了所有思考方式。
@@ -104,7 +119,7 @@ marvis-roundtable-skills/
 ├── CLAUDE.md                     ← Claude Code 的仓库级入口
 ├── CONTRIBUTING.md               ← 如何贡献一个新角色
 ├── docs/
-│   ├── output-contract.md        ← 冻结契约 v1.6.0（含 §8 §9 §10 §11 §12）
+│   ├── output-contract.md        ← 冻结契约 v1.7.0（含 §8 §9 §10 §11 §12 §13）
 │   └── example-session.md        ← 一次完整讨论的实录（示例数据，含脚本误报说明）
 ├── evals/
 │   └── evals.json                ← 36 条离线评测（trigger / command / artifact）
@@ -113,7 +128,9 @@ marvis-roundtable-skills/
 │   ├── role-civilian/            平民视角（前缀 V）
 │   └── role-contrarian/          职业杠精（前缀 C）
 ├── tools/
-│   ├── validate_repo.py          ← 117 项仓库自检（结构/契约/版本/禁用写法/社区角色/16 个脚本自检）
+│   ├── quickstart.py             ← ★ 一条命令跑通（体检 + 跑一场 + 自检 + 下一步）
+│   ├── wizard.py                 ← ★ 交互式向导，替你生成 5 个阶段配置
+│   ├── validate_repo.py          ← 121 项仓库自检（结构/契约/版本/禁用写法/社区角色/17 个脚本自检）
 │   ├── validate_role.py          ← 社区角色协议校验器（13 项检查）
 │   ├── run_evals.py              ← 离线评测 runner（不调用模型，--live 会明确说明）
 │   ├── package_bundle.py         ← 打包 ZIP（整包 + 逐技能），打包前校验

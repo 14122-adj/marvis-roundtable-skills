@@ -1,0 +1,23 @@
+{
+  "meta": {
+    "shared_hidden_assumption": "流程的价值等于它拦下了多少事",
+    "assumption_broken": [
+      "频率是成本主项"
+    ],
+    "ignored_dimension": "上下文切换成本",
+    "memory": "流程优化的对象不是频率而是单次固定开销。",
+    "memory_tags": [
+      "示例"
+    ]
+  },
+  "action_plan": {
+    "owner": "karpathy",
+    "start": "本周在 2 个团队试点，阈值设为指标跌破 8%",
+    "kpi": "30 天内触发不超过 5 次",
+    "kill": "30 天内触发超过 12 次就回滚",
+    "need_info": [
+      "过去两年的单次流程人时"
+    ]
+  },
+  "persist_memory": false
+}

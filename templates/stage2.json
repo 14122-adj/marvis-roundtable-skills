@@ -1,0 +1,59 @@
+{
+  "camps": {
+    "blue": [
+      "munger",
+      "jobs",
+      "pg"
+    ],
+    "red": [
+      "musk",
+      "feynman",
+      "karpathy"
+    ]
+  },
+  "exchanges": [
+    {
+      "from": "munger",
+      "interrupt": true,
+      "target_claim": "M1-1",
+      "inner_thought": "这条假设没人验证",
+      "evidence": "示例",
+      "text": "[打断] 你的推演假设组织愿意改变，这个假设没被验证"
+    },
+    {
+      "from": "jobs",
+      "target_claim": "F1-1",
+      "inner_thought": "这堆环节没人真需要",
+      "evidence": "减法清单",
+      "text": "方案多出两个审批环节，砍掉后成本降 30%"
+    },
+    {
+      "from": "pg",
+      "target_claim": "K1-1",
+      "inner_thought": "我只有两个案例，但必须顶住",
+      "evidence": "示例案例",
+      "text": "只改频率不改内容的两个案例都回到原状"
+    },
+    {
+      "from": "musk",
+      "target_claim": "G2-1",
+      "inner_thought": "量级可能不够，先给数",
+      "evidence": "示例",
+      "text": "接受这条，但它只影响 9%，若超过 25% 则结论反转"
+    },
+    {
+      "from": "feynman",
+      "target_claim": "J2-1",
+      "inner_thought": "他连谁不需要都答不上来",
+      "evidence": "可操作化",
+      "text": "「没人需要」需要一个可观测判据，否则无法检验"
+    },
+    {
+      "from": "karpathy",
+      "target_claim": "P2-1",
+      "inner_thought": "两个案例撑不起结论",
+      "evidence": "实验设计",
+      "text": "两个案例不足以支撑结论，但足以设计一个对照实验"
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "options": {
+    "A": {
+      "summary": "全量切换，三个月内完成"
+    },
+    "B": {
+      "summary": "维持现状，只优化一个环节"
+    },
+    "C": {
+      "summary": "改为触发式：条件满足才启动"
+    }
+  },
+  "votes": {
+    "musk": "B",
+    "feynman": "C",
+    "munger": "B",
+    "jobs": "C",
+    "karpathy": "B",
+    "pg": "C"
+  },
+  "vote_reasons": {
+    "musk": "该方案判据可观测",
+    "feynman": "该方案判据可观测",
+    "munger": "该方案判据可观测",
+    "jobs": "该方案判据可观测",
+    "karpathy": "该方案判据可观测",
+    "pg": "该方案判据可观测"
+  },
+  "decision": "C",
+  "decision_reason": "判据可观测且风险已防住"
+}
