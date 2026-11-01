@@ -33,9 +33,9 @@ CORE_SKILLS = ["roundtable-orchestrator", "meta-supervisor", "position-evolution
                "ultimate-roundtable", "host-bootstrap"]
 ROLE_SKILLS = ["role-musk", "role-feynman", "role-munger", "role-jobs", "role-karpathy", "role-pg"]
 ALL_SKILLS = CORE_SKILLS + ROLE_SKILLS
-EXPECTED_VERSION = "1.3.0"
+EXPECTED_VERSION = "1.4.0"
 # 版本例外：这两个技能按上游 spec 独立发版，不参与统一版本对齐
-VERSION_OVERRIDES = {"ultimate-roundtable": "3.0.0", "host-bootstrap": "3.0.0"}
+VERSION_OVERRIDES = {"ultimate-roundtable": "4.0.0", "host-bootstrap": "3.0.0"}
 
 # 不得出现在文档里的真实模型名（本包一律用占位符或 unspecified）
 FABRICATED_MODEL_RE = re.compile(
@@ -71,10 +71,12 @@ EXPECTED_FILES = {
     "multi-model-adapter": ["scripts/runtime_manifest.py",
                             "references/provider-assignment-guide.md"],
     "ultimate-roundtable": ["scripts/ultimate_orchestrator.py", "scripts/clash_analyzer.py",
-                            "scripts/memory_store.py",
+                            "scripts/memory_store.py", "scripts/attention_split.py",
+                            "scripts/deadlock_detector.py",
                             "references/adversarial-tactics.md",
                             "references/report-template.md",
-                            "references/tool-protocol.md"],
+                            "references/tool-protocol.md",
+                            "references/tactical-playbook.md"],
     "host-bootstrap": ["scripts/bootstrap.py", "references/host-matrix.md"],
     "role-musk": ["references/first-principles-examples.md"],
     "role-feynman": ["references/explanation-verification.md"],
@@ -98,6 +100,8 @@ SCRIPTS = [
     "skills/ultimate-roundtable/scripts/ultimate_orchestrator.py",
     "skills/ultimate-roundtable/scripts/clash_analyzer.py",
     "skills/ultimate-roundtable/scripts/memory_store.py",
+    "skills/ultimate-roundtable/scripts/attention_split.py",
+    "skills/ultimate-roundtable/scripts/deadlock_detector.py",
     "skills/host-bootstrap/scripts/bootstrap.py",
 ]
 

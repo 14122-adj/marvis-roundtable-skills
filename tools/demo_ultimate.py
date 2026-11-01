@@ -27,6 +27,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 UR = ROOT / "skills" / "ultimate-roundtable" / "scripts"
 TOPIC = "【示例数据】要不要把年度评审改成季度评审"
+NORTH_STAR = "月活"
 
 
 def run(cmd: list, quiet: bool, expect_ok: bool = True) -> str:
@@ -62,38 +63,38 @@ def stage1_payload(measure: dict) -> dict:
     # V3：每条发言 = [数据诉求] + [Tool Call] + 表态句，三样缺一不可
     return {"confessions": [
         {"role": "musk",
-         "text": "评审频率本身不是成本主项，真正的主项是每次评审的固定开销。"
-                 "[数据诉求: 需要过去两年每次评审的平均参与人时与直接成本] "
+         "text": "月活增长的主约束是评审占用的固定人时。"
+                 "[数据诉求: 过去两年每次评审的平均参与人时] "
                  "[Tool Call: Code] 目的：统计本仓库文件数作为规模量级参考。"
                  "基于此数据，我的观点是：频次不是主变量。",
          "tool_result": real_a},
         {"role": "feynman",
-         "text": "如果说不清「季度评审」到底改了什么，这个议题根本无法检验。"
-                 "[数据诉求: 需要现行评审制度里被季度化影响的具体环节清单] "
+         "text": "月活要可归因，先得定义「季度评审」改了什么。"
+                 "[数据诉求: 被季度化影响的环节清单] "
                  "[Tool Call: Search] 关键词：季度评审 制度变更 环节。"
-                 "基于此数据，我的观点是：必须先列出受影响环节才能谈频次。",
+                 "基于此数据，我的观点是：先列环节再谈频次。",
          "tool_result": sim("季度评审 制度变更 环节", "（模拟）影响环节：材料准备、评审会、复议")},
         {"role": "munger",
-         "text": "缩短周期会让短期指标挤掉长期投入，这是激励结构问题不是效率问题。"
-                 "[数据诉求: 需要考核周期与项目周期的错配记录] "
+         "text": "缩短周期会用短期月活挤掉长期投入。"
+                 "[数据诉求: 考核周期与项目周期的错配记录] "
                  "[Tool Call: Search] 关键词：考核周期 项目周期 错配。"
-                 "基于此数据，我的观点是：频次改变会放大短周期激励的扭曲。",
+                 "基于此数据，我的观点是：频次会放大短周期扭曲。",
          "tool_result": sim("考核周期 项目周期 错配", "（模拟）三个跨年度项目因短周期考核被削减预算")},
         {"role": "jobs",
-         "text": "评审流程本身就是多余复杂度，先问要不要评审再问频次。"
-                 "[数据诉求: 需要过去一年因评审被拦下的项目数量] "
+         "text": "固定评审是拖累月活的多余复杂度，先问要不要评审。"
+                 "[数据诉求: 过去一年因评审被拦下的项目数] "
                  "[Tool Call: Search] 关键词：评审 拦截 项目数。"
-                 "基于此数据，我的观点是：复议环节应当先被砍掉。",
+                 "基于此数据，我的观点是：复议环节应先砍。",
          "tool_result": sim("评审 拦截 项目数", "（模拟）拦下 4 个，其中 2 个事后被证明该拦")},
         {"role": "karpathy",
-         "text": "频次与质量的权衡缺少可测量口径，现在换频次等于瞎调参数。"
-                 "[数据诉求: 需要评审结论与实际结果的对照数据] "
+         "text": "月活与评审频次缺少可测量口径，现在换等于瞎调参数。"
+                 "[数据诉求: 评审结论与实际结果的对照数据] "
                  "[Tool Call: Code] 目的：统计本仓库总行数作为口径复杂度参考。"
                  "基于此数据，我的观点是：先定口径再谈频次。",
          "tool_result": real_b},
         {"role": "pg",
-         "text": "我见过的案例里，改频次成功的都同时改了评审内容。"
-                 "[数据诉求: 需要至少 3 个只改频次未改内容的对照案例] "
+         "text": "我见过的案例里，改频次成功的都同时改了评审内容，月活没掉。"
+                 "[数据诉求: 至少 3 个只改频次未改内容的对照案例] "
                  "[Tool Call: Search] 关键词：只改频次 未改内容 案例。"
                  "基于此数据，我的观点是：频次不是自变量。",
          "tool_result": sim("只改频次 未改内容 案例", "（模拟）2 个案例：改频次未改内容，半年后回到原状")},
@@ -143,6 +144,34 @@ def stage2_payload() -> dict:
 
 
 def stage3_payload() -> dict:
+    """V4 铁血裁决：A/B/C 三选一 + 六人最后一票。"""
+    return {
+        "options": {
+            "A": {"summary": "全量改为季度评审，三个月内切换完毕",
+                  "kind": "激进派：高收益高风险"},
+            "B": {"summary": "维持年度评审，只把材料准备流程精简一半",
+                  "kind": "保守派：低收益低风险"},
+            "C": {"summary": "取消固定评审，改为触发式评审：月活跌破阈值才开",
+                  "kind": "奇招：跳出当前框架的物理/降维解法"},
+        },
+        "votes": {"musk": "A", "feynman": "C", "munger": "B",
+                  "jobs": "C", "karpathy": "C", "pg": "B"},
+        "vote_reasons": {
+            "musk": "月活增长窗口只有三个月，慢一步就没了",
+            "feynman": "触发式评审有可观测判据（月活阈值），另外两个都在拍脑袋",
+            "munger": "全量切换的失败路径太多，先精简材料更稳",
+            "jobs": "固定评审本身就是冗余，触发式最省",
+            "karpathy": "触发式可做对照实验，指标可复现",
+            "pg": "我见过全量切换失败的案例，选保守",
+        },
+        "decision": "C",
+        "decision_reason": "C 拿到 3 票，且红蓝双方都承认其判据可观测；"
+                           "A 的下行风险（申诉积压）未被有效防住",
+    }
+
+
+def sandbox_payload() -> dict:
+    """V4 中沙盘降级为可选项，不覆盖三选一裁决。"""
     return {
         "sandbox": {
             "plan": "方案 A：季度评审 + 砍掉复议环节 + 保留材料准备",
@@ -205,18 +234,20 @@ def stage3_payload() -> dict:
         ],
     }
 
-
 def stage4_payload(store: str | None = None) -> dict:
     payload = {"meta": {
         "shared_hidden_assumption": "评审的价值等于它拦下了多少项目",
         "assumption_broken": ["评审频次是成本主项", "复议环节是纯冗余"],
         "ignored_dimension": "上下文切换成本与申诉合规成本",
-        "consensus": "评审的固定开销与切换成本比频次本身更影响结果",
-        "core_divergence": "评审该不该存在（价值分歧，逻辑无法消解，只能各自说明条件）",
-        "memory": "评审类流程的优化对象不是频次而是单次固定开销与切换成本；"
-                  "砍环节前先问它承担了什么风险，尤其是申诉与合规通道——"
-                  "这类环节的缺失成本通常延后三个月才显现。",
-        "memory_tags": ["评审", "流程", "成本"],
+        "memory": "评审类流程的优化对象不是频次而是单次固定开销；"
+                  "砍环节前先问它承担了什么风险，尤其申诉与合规通道。",
+        "memory_tags": ["评审", "流程", "月活"],
+    }, "action_plan": {
+        "owner": "karpathy",
+        "start": "本周在 2 个团队上线触发式评审，阈值设为月活跌破 8%",
+        "kpi": "30 天内触发不超过 5 次，月活不低于 9%",
+        "kill": "如果 30 天内触发超过 12 次，立刻停止并回滚到年度评审",
+        "need_info": ["过去两年每次评审的平均参与人时", "触发阈值的敏感性测试结果"],
     }, "persist_memory": True}
     if store:
         payload["store"] = store
@@ -249,18 +280,21 @@ def main() -> int:
     # 记忆库放在演示目录内，避免污染仓库的真实记忆
     store = str(out / "memories.jsonl")
 
-    print("\n=== 0b. 阶段零：记忆唤醒 ===")
+    print("\n=== 0b. 阶段零：记忆唤醒 + 北极星锚定 ===")
     p0 = work / "stage0.json"
-    p0.write_text(json.dumps({"store": store}, ensure_ascii=False), encoding="utf-8")
+    p0.write_text(json.dumps({"store": store, "north_star": NORTH_STAR},
+                             ensure_ascii=False), encoding="utf-8")
     r0 = json.loads(run([py, orch, "stage0", "--state", state, "--file", str(p0), "--write"],
                         args.quiet))
     print(r0["opening_line"])
+    print(f"北极星指标：{r0['north_star']}　→ {r0['focus_rule']}")
 
-    print("\n=== 1. 阶段一：极速摊牌与工具诉求（含 Tool Call 闭环） ===")
+    print("\n=== 1. 阶段一：极速交底（150 字 + 分舱 + 工具闭环） ===")
     p1 = work / "stage1.json"
     p1.write_text(json.dumps(stage1_payload(measure), ensure_ascii=False, indent=2),
                   encoding="utf-8")
     run([py, orch, "stage1", "--state", state, "--file", str(p1), "--write"], args.quiet)
+    run([py, str(UR / "attention_split.py"), "check", "--state", state], args.quiet)
 
     print("\n=== 2. 阶段二：内心戏 + 打断 + 红蓝对抗 + 交叉验真 ===")
     p2 = work / "stage2.json"
@@ -268,7 +302,7 @@ def main() -> int:
     run([py, orch, "stage2", "--state", state, "--file", str(p2), "--write"], args.quiet)
     run([py, clash, "spark", "--state", state, "--round", "2"], args.quiet)
 
-    print("\n=== 2b. 反例验证：空洞发言必须被拒绝（强制重开） ===")
+    print("\n=== 2b. 反例：空洞发言必须被拒绝（强制重开） ===")
     hollow = {"camps": {"blue": ["munger", "jobs", "pg"],
                         "red": ["musk", "feynman", "karpathy"]},
               "exchanges": [{"from": r, "inner_thought": "随便吧", "text": "我觉得挺好的"}
@@ -279,15 +313,13 @@ def main() -> int:
                           capture_output=True, text=True, encoding="utf-8", errors="replace")
     if proc.returncode == 4:
         print("空洞发言被判为 no_spark，退出码 4，强制重开（符合预期）")
-        if not args.quiet:
-            print(proc.stdout[:400])
     else:
         print(f"!! 预期退出码 4，实际 {proc.returncode}")
         return 1
 
-    print("\n=== 2c. 反例验证：数据诉求无 Tool Call 必须被拒绝 ===")
+    print("\n=== 2c. 反例：数据诉求无 Tool Call 必须被拒绝 ===")
     no_closure = stage1_payload(measure)
-    no_closure["confessions"][0]["text"] = "我的结论依赖数据。[数据诉求: 需要某个指标]"
+    no_closure["confessions"][0]["text"] = f"{NORTH_STAR} 的结论依赖数据。[数据诉求: 需要某个指标]"
     pc = work / "stage1-no-closure.json"
     pc.write_text(json.dumps(no_closure, ensure_ascii=False, indent=2), encoding="utf-8")
     proc2 = subprocess.run([py, orch, "stage1", "--state", state, "--file", str(pc)],
@@ -298,23 +330,80 @@ def main() -> int:
         print(f"!! 预期退出码 3，实际 {proc2.returncode}")
         return 1
 
-    print("\n=== 3. 阶段三：终极沙盘 + 工具验证 + 动态召唤 ===")
+    print("\n=== 2d. 反例：发言超 150 字必须被拒绝（分舱闸门） ===")
+    too_long = stage1_payload(measure)
+    too_long["confessions"][0]["text"] = (
+        f"{NORTH_STAR} " + "铺垫" * 90 +
+        "。[数据诉求: 需要指标] [Tool Call: Search] 关键词：x。基于此数据，我的观点是：x。")
+    pl = work / "stage1-too-long.json"
+    pl.write_text(json.dumps(too_long, ensure_ascii=False, indent=2), encoding="utf-8")
+    proc3 = subprocess.run([py, orch, "stage1", "--state", state, "--file", str(pl)],
+                           capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if proc3.returncode == 3:
+        print("超 150 字被判为阶段一失败，退出码 3（符合预期）")
+    else:
+        print(f"!! 预期退出码 3，实际 {proc3.returncode}")
+        return 1
+
+    print("\n=== 2e. 死锁检测：构造两轮复读场景 ===")
+    dead = json.loads((out / "state.json").read_text(encoding="utf-8"))
+    dead["clash_exchanges"] = []
+    for rnd in (2, 3):
+        for e in stage2_payload()["exchanges"]:
+            e2 = dict(e)
+            e2["round"] = rnd
+            dead["clash_exchanges"].append(e2)
+    dead["argument_log"] = []
+    dead["revisions"] = []
+    dead["stage2"] = {"verifications": []}
+    dp = work / "deadlock-probe.json"
+    dp.write_text(json.dumps(dead, ensure_ascii=False), encoding="utf-8")
+    dl = json.loads(run([py, str(UR / "deadlock_detector.py"), "check", "--state", str(dp)],
+                        args.quiet))
+    if dl.get("deadlock"):
+        print(f"两轮复读被判为死锁（连续停滞 {dl['consecutive_stalled']} 轮）")
+        print(f"熔断话术：{dl['fuse_message']}")
+    else:
+        print(f"!! 预期判定死锁，实际 {dl.get('consecutive_stalled')} 轮停滞")
+        return 1
+
+    print("\n=== 3. 阶段三：铁血裁决（三选一） ===")
     p3 = work / "stage3.json"
     p3.write_text(json.dumps(stage3_payload(), ensure_ascii=False, indent=2), encoding="utf-8")
-    run([py, orch, "stage3", "--state", state, "--file", str(p3), "--write"], args.quiet)
-    run([py, clash, "survival", "--state", state], args.quiet)
+    r3 = json.loads(run([py, orch, "stage3", "--state", state, "--file", str(p3), "--write"],
+                        args.quiet))
+    print(f"票数：{r3['tally']}　拍板：方案 {r3['decision']}")
 
-    print("\n=== 4. 阶段四：元认知降维打击 + 记忆沉淀 ===")
+    print("\n=== 3b. 可选：沙盘推演（不覆盖裁决） ===")
+    ps = work / "sandbox.json"
+    ps.write_text(json.dumps(sandbox_payload(), ensure_ascii=False, indent=2), encoding="utf-8")
+    run([py, orch, "sandbox", "--state", state, "--file", str(ps), "--write"], args.quiet)
+
+    print("\n=== 4. 阶段四：战术级行动清单 + 记忆沉淀 ===")
     p4 = work / "stage4.json"
     p4.write_text(json.dumps(stage4_payload(store), ensure_ascii=False, indent=2),
                   encoding="utf-8")
     run([py, orch, "stage4", "--state", state, "--file", str(p4), "--write"], args.quiet)
     run([py, str(UR / "memory_store.py"), "stats", "--store", store], args.quiet)
 
+    print("\n=== 4b. 反例：Kill 无数字必须被拒绝（拒绝咨询体） ===")
+    vague = stage4_payload(store)
+    vague["action_plan"]["kill"] = "如果效果不好就停止"
+    vague["persist_memory"] = False
+    pv = work / "stage4-vague.json"
+    pv.write_text(json.dumps(vague, ensure_ascii=False, indent=2), encoding="utf-8")
+    proc4 = subprocess.run([py, orch, "stage4", "--state", state, "--file", str(pv)],
+                           capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if proc4.returncode == 3:
+        print("止损红线无数字被判为阶段四失败，退出码 3（符合预期）")
+    else:
+        print(f"!! 预期退出码 3，实际 {proc4.returncode}")
+        return 1
+
     print("\n=== 5. 完整性检查 ===")
     run([py, orch, "check", "--state", state], args.quiet)
 
-    print("\n=== 6. 生成终极圆桌决策报告 V3.0 ===")
+    print("\n=== 6. 生成终极圆桌决策报告 V4.0 ===")
     report = out / "ultimate-report.md"
     run([py, orch, "report", "--state", state, "--out", str(report)], args.quiet)
     print(report.read_text(encoding="utf-8"))

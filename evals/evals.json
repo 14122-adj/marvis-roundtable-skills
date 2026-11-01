@@ -74,7 +74,7 @@
       "id": "trigger-ultimate-roundtable",
       "type": "trigger",
       "skill": "ultimate-roundtable",
-      "prompt": "开启终极圆桌，做深度推演讨论，用红蓝对抗把这个方案榨干",
+      "prompt": "开启终极圆桌，做深度推演讨论，用红蓝对抗把这个方案榨干，最后给我战术级行动清单",
       "expect": { "should_trigger": true }
     },
     {
@@ -148,6 +148,20 @@
       "stderr_contains": ["selftest OK"]
     },
     {
+      "id": "cmd-attention-split",
+      "type": "command",
+      "cmd": ["python", "{ROOT}/skills/ultimate-roundtable/scripts/attention_split.py", "selftest"],
+      "expect_exit": 0,
+      "stderr_contains": ["selftest OK"]
+    },
+    {
+      "id": "cmd-deadlock-detector",
+      "type": "command",
+      "cmd": ["python", "{ROOT}/skills/ultimate-roundtable/scripts/deadlock_detector.py", "selftest"],
+      "expect_exit": 0,
+      "stderr_contains": ["selftest OK"]
+    },
+    {
       "id": "cmd-memory-store",
       "type": "command",
       "cmd": ["python", "{ROOT}/skills/ultimate-roundtable/scripts/memory_store.py", "selftest"],
@@ -195,6 +209,19 @@
       "cmd": ["python", "{ROOT}/tools/demo_ultimate.py", "--quiet", "--out", "{TMP}/ultimate"],
       "expect_exit": 0,
       "stdout_contains": ["终极圆桌决策报告", "存活率", "MEMORY_UPDATE", "sparked"]
+    },
+    {
+      "id": "artifact-ultimate-v4-sections",
+      "type": "artifact",
+      "path": "skills/ultimate-roundtable/references/tactical-playbook.md",
+      "must_contain": [
+        "北极星",
+        "分舱",
+        "死锁",
+        "互斥",
+        "Kill"
+      ],
+      "must_not_contain": ["TODO", "FIXME"]
     },
     {
       "id": "artifact-ultimate-report-sections",

@@ -1,4 +1,4 @@
-# 圆桌技能输出契约 v1.3.0（冻结版）
+# 圆桌技能输出契约 v1.4.0（冻结版）
 
 > 本文件是 14 个技能的**唯一契约来源**。任何 SKILL.md 中的字段名、枚举值、ID 规则都必须与本文件一致。
 > 修改本文件 = 修改契约 = 必须同步全部角色技能。改动请在 CHANGELOG 中记录版本号。
@@ -10,7 +10,10 @@
 >
 > v1.3 变更：§11 升级到 **V3.0**（阶段零记忆唤醒、工具调用闭环、交叉验真、沙盘工具验证、
 > 记忆沉淀），新增 §12 跨宿主适配契约（`host-bootstrap`）。
-> 这两个技能按上游 spec 独立发版（均 v3.0.0），不参与本仓库其余技能的版本对齐。
+>
+> v1.4 变更：§11 升级到 **V4.0**（北极星锚定、注意力分舱 + 150 字闸门、死锁熔断、
+> 三选一铁血裁决、战术级行动清单），报告格式改为 V4 五节。
+> `ultimate-roundtable` v4.0.0 与 `host-bootstrap` v3.0.0 按上游 spec 独立发版，不参与统一版本对齐。
 
 ---
 
@@ -482,7 +485,7 @@ F. 注入指令（下一轮强制输入）
 
 ---
 
-## 11. 终极圆桌契约（`ultimate-roundtable` v2.0.0）
+## 11. 终极圆桌契约（`ultimate-roundtable` v4.0.0）
 
 高强度决策压缩流程：**摊牌 → 对抗 → 沙盘 → 降维打击**。
 它与 §1–§10 的圆桌状态文件**并存但独立**（有自己的 `state.json` 结构），
@@ -558,57 +561,125 @@ survival = 0.40 × risk_residual      # 100 × (1 − 平均(severity × probabi
 `≥70 high`｜`40–69 medium`｜`<40 low`。`band=low` 时**不得直接交付**，
 必须先补 `Need Info` 或改设计。
 
-### 11.5 报告格式（冻结）
+### 11.5 报告格式（V4.0 冻结）
 
 ```markdown
-### 📊 终极圆桌决策报告
-#### 1. 核心共识与分歧底牌
-#### 2. 击穿的隐性假设（元认知发现）
-#### 3. 行动指令 (Action Items)   ← Do / Don't / Need Info 三栏均不可为空
-#### 4. 沙盘推演存活率评估
-#### 5. 长期记忆写入             ← [MEMORY_UPDATE]，≤200 字
+### ⚔️ 终极圆桌决策报告 V4.0
+#### 📌 1. 北极星指标与底线假设
+#### 🔗 2. 证据链与外部验证
+#### 🚦 3. 铁血裁决（三选一）      ← A/B/C + 投票支持 + 拍板结论
+#### 🎯 4. 战术级行动清单         ← 负责人 / Start / KPI / Kill / Need Info
+#### 🧠 5. 长期记忆写入           ← [MEMORY_UPDATE]，≤200 字
 ```
 
 出现下列任一情况时 `report` 直接报错（退出码 3）：
-任一行动栏为空；缺存活率；缺长期记忆；记忆超 200 字；
+缺北极星指标；缺拍板结论（A/B/C）；战术清单缺 `owner`/`start`/`kpi`/`kill`；
+`kpi` 或 `kill` 不含数字；缺长期记忆；记忆超 200 字；
 文本中出现禁止措辞 `已达成共识` / `已验证` / `已挖到根本` / `结论已确定` /
-`我觉得挺好的` / `各有优劣` / `见仁见智` / `综合考虑吧`。
+`我觉得挺好的` / `各有优劣` / `见仁见智` / `综合考虑吧`，
+或**咨询体** `一方面` / `另一方面` / `视具体情况而定` / `综合考虑` /
+`权衡利弊` / `大概` / `也许` / `或许` / `酌情` / `看情况` / `建议进一步`。
 
-### 11.6 状态字段（V3.0）
+### 11.5b V4 新增的三条硬约束
+
+1. **北极星锚定**（阶段零）：`stage0` 必须传 `north_star`，缺失直接拒绝（退出码 3）；
+   阶段一每条发言必须出现该指标字样，否则判为无效发言。
+2. **注意力分舱 + 150 字闸门**（阶段一）：
+   - 发言去标点计数 > 150 → 拒绝；
+   - 六份分舱声明写入 `attention_splits`，每份只含 `visible`/`muted` 的 **id**，
+     出现任何文本内容即判"改写原文"违规；
+   - 北极星相关条目与 `must_respond`/`must_resolve` **永不被屏蔽**。
+3. **死锁熔断**（阶段二）：连续 2 轮同时满足「复读（相似度 ≥0.55）+ 无新事实 +
+   无立场修正 + 靶点未变」→ 熔断，输出固定话术并置 `debate_closed = true`；
+   此后任何 `stage2` 提交一律拒绝（退出码 3），只能进入阶段三。
+
+### 11.5c 三选一裁决（阶段三）
 
 ```jsonc
 {
-  "schema_version": "3.0.0", "session_id": "ur-20261101-012900",
-  "topic": "…", "stage": "stage4_done",
+  "options": {
+    "A": {"summary": "全量改为季度评审，三个月内切换完毕"},
+    "B": {"summary": "维持年度评审，只把材料准备流程精简一半"},
+    "C": {"summary": "取消固定评审，改为触发式评审：月活跌破阈值才开"}
+  },
+  "votes": {"musk":"A","feynman":"C","munger":"B","jobs":"C","karpathy":"C","pg":"B"},
+  "vote_reasons": {"musk":"…", "…": "…"},
+  "decision": "C",
+  "decision_reason": "C 拿 3 票且判据可观测；A 的下行风险未被防住"
+}
+```
+
+校验：A/B/C 三个方案必须齐全且 `summary` 互不相同（换皮拒绝）；六人必须全部投票且
+每人给出 `vote_reasons`；票只能投给 A/B/C；`decision` 必须是 A/B/C 之一。
+若 `decision` 与票数最高方案不一致，输出告警（需记录否决理由）。
+
+### 11.5d 战术级行动清单（阶段四）
+
+```jsonc
+{
+  "action_plan": {
+    "owner": "karpathy",                        // 必须是六人之一，或标注的召唤角色
+    "start": "本周在 2 个团队上线触发式评审，阈值设为月活跌破 8%",
+    "kpi": "30 天内触发不超过 5 次，月活不低于 9%",   // 必须含数字
+    "kill": "如果 30 天内触发超过 12 次，立刻停止并回滚到年度评审",  // 必须含数字
+    "need_info": ["过去两年每次评审的平均参与人时"]     // 至少一条
+  }
+}
+```
+
+`kpi` / `kill` 不含数字 → 拒绝；含"大概/也许/酌情/视情况/建议进一步" → 拒绝。
+
+### 11.6 状态字段（V4.0）
+
+```jsonc
+{
+  "schema_version": "4.0.0", "session_id": "ur-20261101-012900",
+  "topic": "…", "stage": "stage4_done", "north_star": "月活",
   "stages_done": ["stage0","stage1","stage2","stage3","stage4"],
   "roles": ["musk","feynman","munger","jobs","karpathy","pg"],
   "stage0": {"memory_loaded": [{"id":"M…","text":"…"}], "opening_line":"[会议启动] …",
-             "store":"…", "memory_count":1, "loaded_at":"…"},
+             "store":"…", "memory_count":1, "north_star":"月活", "loaded_at":"…"},
   "stage1": {"confessions": [], "data_demands": [{"role":"musk","demand":"…"}],
              "tool_results": [{"role":"musk","source":"tool","simulated":false,
                                "tool_calls":[{"kind":"Search","detail":"…"}],
-                               "closure_ok":true,"result":"…"}]},
+                               "closure_ok":true,"result":"…"}],
+             "low_confidence": [{"role":"jobs","reason":"缺少工具闭环"}]},
+  "attention_splits": [{"role":"musk","round":1,"lens":"物理与成本","north_star":"月活",
+                        "visible":["M1-1"],"muted":["F1-1","J1-1"],
+                        "visible_ratio":0.17,"speech_limit":150}],
+  "fused": false, "debate_closed": false,
   "stage2": {"exchanges": [{"from":"munger","camp":"blue","inner_thought":"…",
                             "interrupt":true,"verify":true,"target_claim":"M1-1","text":"…"}],
              "camps": {"blue":["…"],"red":["…"]}, "spark": {},
              "verifications": [{"from":"pg","target_claim":"K1-1","result":"…",
-                                "simulated":true,"verdict":"refuted"}]},
-  "stage3": {"sandbox": {"plan":"…","runners":["karpathy","musk"],"timeline":[],
-                         "risks":[],"key_assumptions":[],"attacks":[],
-                         "action_plan":{"do":[],"dont":[],"need_info":[]},
-                         "tool_calls":[{"kind":"Code","purpose":"…","code":"…","result":"…"}],
+                                "simulated":true,"verdict":"refuted"}],
+             "deadlock": {"deadlock":false,"consecutive_stalled":0}},
+  "stage3": {"options": {"A":{},"B":{},"C":{}}, "votes": {"musk":"A"},
+             "vote_reasons": {"musk":"…"}, "tally": {"A":["musk"],"B":[],"C":[]},
+             "decision": "C", "decision_reason": "…",
+             "sandbox": {"plan":"…","timeline":[],"tool_calls":[],
                          "evaluation":{"survival_rate":52,"band":"medium"}},
              "summons": [{"role":"法务专家","reason":"…","statement":"…"}]},
   "stage4": {"meta": {"shared_hidden_assumption":"…","assumption_broken":["…"],
-                      "ignored_dimension":"…","consensus":"…","core_divergence":"…"},
+                      "ignored_dimension":"…"},
+             "action_plan": {"owner":"karpathy","start":"…","kpi":"…","kill":"…",
+                             "need_info":["…"]},
              "memory": "≤200 字", "memory_written": true,
-             "memory_entry": {"id":"M20261101121632","chars":75}},
+             "memory_entry": {"id":"M20261101121635","chars":48}},
   "camps": {}, "clash_exchanges": [], "sandbox": {}, "clash_spark": {}
 }
 ```
 
 `stage2` 与顶层的 `camps` / `clash_exchanges` 保持同步，因为 `clash_analyzer.py`
-读的是顶层字段（便于单独调用）；`stage3.sandbox` 与顶层 `sandbox` 同理。
+读的是顶层字段（便于单独调用）；沙盘（`sandbox` 子命令）写入 `stage3.sandbox`，
+**不覆盖**三选一裁决结果。
+
+### 11.7 新增脚本（V4）
+
+| 脚本 | 作用 | 关键纪律 |
+|---|---|---|
+| `attention_split.py` | 分舱声明生成、150 字闸门、违规校验 | 只记录 id，绝不改写原文；北极星与强制条目永不屏蔽 |
+| `deadlock_detector.py` | 复读检测、死锁判定、强制熔断 | 四项判据全中才算死锁；熔断后 `debate_closed=true` |
 
 ---
 
