@@ -324,9 +324,24 @@ def check(state: dict, rounds: int = ROUNDS_TO_DEADLOCK) -> dict:
         else:
             break
 
-    deadlock = consecutive >= rounds
     latest = signals[-1] if signals else None
-    semantic_hit = bool(latest and latest["semantic"].get("semantic_repeat") is True)
+
+    # spec：「一旦发现语义复读（或者连续两轮没有产生新事实）」——这是两个独立条件：
+    #   条件一（语义）：本轮判定为语义复读 → 立刻熔断，不需要连续两轮
+    #   条件二（结构）：连续两轮没有产生新事实 → 熔断
+    semantic_repeat_now = bool(latest and latest["semantic"].get("semantic_repeat") is True)
+    structural_deadlock = consecutive >= rounds
+
+    if semantic_repeat_now:
+        deadlock = True
+        trigger = "semantic"
+    elif structural_deadlock:
+        deadlock = True
+        trigger = "structural"
+    else:
+        deadlock = False
+        trigger = ""
+
     return {
         "needs_judgment": True,
         "already_fused": False,
@@ -336,8 +351,9 @@ def check(state: dict, rounds: int = ROUNDS_TO_DEADLOCK) -> dict:
         "threshold_rounds": rounds,
         "signals": signals,
         "latest": latest,
-        "trigger": ("semantic" if semantic_hit else
-                    ("structural" if deadlock else "")),
+        "trigger": trigger,
+        "semantic_repeat_immediate": semantic_repeat_now,
+        "structural_rounds_required": rounds,
         "fuse_required": deadlock,
         "fuse_message": FUSE_TEMPLATE if deadlock else "",
         "reasons": latest["reasons"] if deadlock and latest else [],
@@ -346,8 +362,9 @@ def check(state: dict, rounds: int = ROUNDS_TO_DEADLOCK) -> dict:
             "rounds_with_verdicts": len([s for s in signals
                                          if s["semantic"]["judged_pairs"] > 0]),
         },
-        "note": ("死锁判定双路径：语义裁判（REPEAT 且无 PROGRESS）优先；"
-                 "无语义判定时退回结构判据（复读/新事实/立场/靶点四项）。"
+        "note": ("熔断触发条件二选一（spec 原文「或者」）："
+                 "① 本轮判定为语义复读 → 立刻熔断；"
+                 "② 连续 N 轮没有产生新事实 → 熔断。"
                  "语义路径可审计：每条判定都记录了 from/to/label/reason。"),
     }
 
@@ -470,7 +487,8 @@ def fuse(state_path: str, state: dict, reason: str = "") -> dict:
     state["fuse_trigger"] = result.get("trigger") or "manual"
     state["fuse_reason"] = reason or "；".join(result.get("reasons", [])) or "手动熔断"
     state["debate_closed"] = True
-    save_state(state_path, state)
+    if state_path:                      # 供 orchestrator 内存态调用时跳过落盘
+        save_state(state_path, state)
     return {
         "needs_judgment": False,
         "fused": True,
@@ -568,22 +586,23 @@ def selftest() -> int:
     r3 = check(prog)
     ck(r3["deadlock"] is False, "语义判 PROGRESS 时即使结构相似也放行")
 
-    # ---- 单轮 REPEAT 不足以熔断（需连续两轮）----
+    # ---- 单轮 REPEAT 即刻熔断（spec：一旦发现语义复读）----
     one = two_rounds()
-    one["argument_log"] = [{"round": 2, "is_new_key_argument": True}]  # 第 2 轮有推进
+    one["argument_log"] = [{"round": 2, "is_new_key_argument": True}]
     one["semantic_verdicts"] = [{"round": 3, "from": "munger", "to": "munger", "label": "REPEAT"}]
     r4 = check(one)
-    ck(r4["deadlock"] is False and r4["consecutive_stalled"] == 1,
-       "只有当前轮 REPEAT 时连续停滞为 1，不熔断")
+    ck(r4["deadlock"] is True and r4["trigger"] == "semantic",
+       "单轮语义 REPEAT 即刻熔断（不需要连续两轮）")
+    ck(r4["semantic_repeat_immediate"] is True, "标记为语义即刻熔断")
 
-    # ---- 两轮都 REPEAT ----
+    # ---- 连续两轮都 REPEAT ----
     both = two_rounds()
     both["semantic_verdicts"] = [
         {"round": 2, "from": "munger", "to": "munger", "label": "REPEAT"},
         {"round": 3, "from": "munger", "to": "munger", "label": "REPEAT"},
     ]
     r5 = check(both)
-    ck(r5["deadlock"] is True and r5["consecutive_stalled"] == 2, "连续两轮语义复读触发熔断")
+    ck(r5["deadlock"] is True and r5["trigger"] == "semantic", "连续两轮语义复读同样熔断")
 
     # ---- UNCERTAIN 不算复读也不算推进 ----
     unc = two_rounds()
