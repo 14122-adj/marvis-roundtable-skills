@@ -379,7 +379,105 @@ def emit_and_fail(obj, msg):
 #   wrong:    skill-name/skill-name/SKILL.md（双层嵌套）
 # --------------------------------------------------------------------------- #
 
+def _skill_tree(d: Path) -> str:
+    """生成技能目录的简短树状说明（占位，实现在下方）。"""
+    return _skill_tree_impl(d)
+
+
 MARKET_README_TEMPLATE = """# {title}
+
+{description}
+
+---
+
+## 为什么不是又一个"角色扮演"技能
+
+大多数多智能体讨论技能，产出的是六份互相恭维的备忘录——没人被逼着证明什么，
+最后什么也没决定。
+
+这个技能让六个人**互相拷问**，并且只允许一种结尾：**一个决定**。
+
+**四个真正起作用的东西**
+
+1. **拒绝角色扮演** — 每个角色跑的是强制思维协议，不是人设服装。
+   马斯克必须拆到物理约束并给出量级估算；费曼必须用外行话讲清否则标记"未理解"；
+   芒格必须先反向问"怎么才能保证它失败"；乔布斯必须回答"这更简单还是更复杂"；
+   Karpathy 必须让每条论断可复现；Paul Graham 必须从真实案例起手。
+   模糊表述在**校验阶段**就被拒绝，不会留到最后。
+
+2. **死锁熔断** — 内置语义级死锁检测。当双方只是在**换说法复读**
+   （同样的论点、不同的词、不同的例子），系统切断辩论、强制进入裁决。
+   逐字重复容易抓，**换说法才是难点**，这里抓的就是后者。
+
+3. **可执行的产出，不是摘要** — 收尾只有三样东西：
+   三个互斥方案（激进 / 保守 / 降维）、六人强制投票、一个决定。
+   然后是一张命令单：负责人、第一步、**带数字的 KPI**、**带数字的止损线**。
+   写"如果效果不好就停止"会被校验器拒绝——模糊是一种构建错误。
+
+4. **零摩擦** — 附带一键跑通与交互式向导。
+   `python tools/quickstart.py`：体检 → 跑完一场完整讨论 → 自检 → 下一步，约 10 秒，
+   无需配置、无需 API key、无依赖。
+   `python tools/wizard.py`：交互式生成你自己的五个阶段配置，**边填边校验**。
+
+---
+
+## 装法
+
+把本目录整个放进你 AI 客户端的 skills 目录：
+
+| 客户端 | 目标位置 |
+|---|---|
+| Claude Code | `~/.claude/skills/{name}/` |
+| Cursor / Cline / Windsurf | 项目内 `skills/{name}/` |
+| 马维斯 Marvis | 技能管理 → 导入技能 → 选本目录的 `SKILL.md` |
+| 其他（读 AGENTS.md 的） | 放进 `skills/{name}/` |
+
+装好后对它说：
+
+> {trigger_example}
+
+**如果你的宿主不支持 ZIP 导入**：克隆 GitHub 仓库后跑 `python tools/quickstart.py`，
+30 秒即可。
+
+---
+
+## 里面有什么
+
+```
+{name}/
+├── SKILL.md          ← 技能本体（agent 读这个）
+{extra_tree}```
+
+---
+
+## 说明
+
+{notes}
+
+需要 Python 3.9+，仅用标准库，不需要安装任何依赖。
+
+许可：MIT。
+"""
+
+
+def _skill_tree_impl(d: Path) -> str:
+    """生成技能目录的简短树状说明。"""
+    lines = []
+    for sub in ("references", "scripts"):
+        p = d / sub
+        if p.is_dir():
+            files = sorted(f.name for f in p.glob("*") if f.is_file())
+            if files:
+                lines.append(f"├── {sub}/")
+                for f in files[:6]:
+                    lines.append(f"│   └── {f}")
+                if len(files) > 6:
+                    lines.append(f"│   └── …（共 {len(files)} 个）")
+    return "\n".join(lines) + ("\n" if lines else "")
+
+
+# 非旗舰技能用精简版 README：讲清用途与装法即可，不套用旗舰的卖点长文
+MARKET_README_LITE = """# {title}
 
 {description}
 
@@ -400,6 +498,9 @@ MARKET_README_TEMPLATE = """# {title}
 
 > {trigger_example}
 
+**如果你的宿主不支持 ZIP 导入**：克隆 GitHub 仓库后跑 `python tools/quickstart.py`，
+30 秒即可。
+
 ---
 
 ## 里面有什么
@@ -415,24 +516,10 @@ MARKET_README_TEMPLATE = """# {title}
 
 {notes}
 
+需要 Python 3.9+，仅用标准库，不需要安装任何依赖。
+
 许可：MIT。
 """
-
-
-def _skill_tree(d: Path) -> str:
-    """生成技能目录的简短树状说明。"""
-    lines = []
-    for sub in ("references", "scripts"):
-        p = d / sub
-        if p.is_dir():
-            files = sorted(f.name for f in p.glob("*") if f.is_file())
-            if files:
-                lines.append(f"├── {sub}/")
-                for f in files[:6]:
-                    lines.append(f"│   └── {f}")
-                if len(files) > 6:
-                    lines.append(f"│   └── …（共 {len(files)} 个）")
-    return "\n".join(lines) + ("\n" if lines else "")
 
 
 def build_market(version: str, out_dir: Path, only: str = None) -> dict:
@@ -458,7 +545,10 @@ def build_market(version: str, out_dir: Path, only: str = None) -> dict:
                    if name == "ultimate-roundtable" else
                    "让这个技能参与你的圆桌讨论")
 
-        readme = MARKET_README_TEMPLATE.format(
+        # 只有旗舰技能用完整卖点页；其余用精简版，避免"套模板"的违和感
+        template = (MARKET_README_TEMPLATE if name == "ultimate-roundtable"
+                    else MARKET_README_LITE)
+        readme = template.format(
             title=title, description=desc, name=name,
             trigger_example=trigger,
             extra_tree=_skill_tree(src),
