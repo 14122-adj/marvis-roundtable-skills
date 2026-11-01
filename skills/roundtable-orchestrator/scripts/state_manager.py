@@ -33,7 +33,12 @@ from pathlib import Path
 
 SCHEMA_VERSION = "1.0"
 DEFAULT_ROLES = ["musk", "feynman", "munger", "jobs", "karpathy", "pg"]
+# 六个原始角色
 ROLE_PREFIX = {"musk": "M", "feynman": "F", "munger": "G", "jobs": "J", "karpathy": "K", "pg": "P"}
+# 社区贡献角色（community-roles/）。它们的 claim id 前缀单独占位，
+# 不与挑战编号冲突：claim 形如 C1-1（带轮次与序号），challenge 形如 C1（无短横）。
+COMMUNITY_PREFIX = {"civilian": "V", "contrarian": "C"}
+ROLE_PREFIX.update(COMMUNITY_PREFIX)
 PREFIX_ROLE = {v: k for k, v in ROLE_PREFIX.items()}
 BASIS_ENUM = [
     "physical_constraint",
@@ -46,7 +51,9 @@ BASIS_ENUM = [
 ]
 # 实质性论据基础：只有这些 basis 才有可能算作"新增关键论据"
 SUBSTANTIVE_BASIS = {"physical_constraint", "empirical", "case", "mechanism"}
-CLAIM_ID_RE = re.compile(r"^([MFGJKP])(\d+)-(\d+)$")
+# 前缀从 ROLE_PREFIX 动态生成，新增角色无需改正则
+_PREFIX_CLASS = "".join(sorted(set(PREFIX_ROLE)))
+CLAIM_ID_RE = re.compile(rf"^([{_PREFIX_CLASS}])(\d+)-(\d+)$")
 ROUND_PHASE = {
     0: ("prepare", "parallel_isolated"),
     1: ("opening", "parallel_isolated"),
@@ -736,6 +743,45 @@ def selftest() -> int:
 
         save_state(path, st)
         check(json.loads(path.read_text(encoding="utf-8"))["session_id"] == "rt-selftest", "状态可持久化")
+
+    # ---- 社区角色前缀（V1.6）：claim 前缀 C/V 必须被接受，且不与 challenge 编号冲突 ----
+    check(PREFIX_ROLE.get("C") == "contrarian", "contrarian 前缀 C 已注册")
+    check(PREFIX_ROLE.get("V") == "civilian", "civilian 前缀 V 已注册")
+    check(CLAIM_ID_RE.match("C1-1") is not None, "claim id C1-1 可被解析")
+    check(CLAIM_ID_RE.match("V2-3") is not None, "claim id V2-3 可被解析")
+    check(CLAIM_ID_RE.match("C1") is None, "challenge 编号 C1 不会被误判为 claim")
+
+    with tempfile.TemporaryDirectory() as td2:
+        p2 = Path(td2) / "community.json"
+        st2 = new_state("社区角色自检", session_id="rt-community")
+        st2["roles"] = DEFAULT_ROLES + ["contrarian", "civilian"]
+        for r in ("contrarian", "civilian"):
+            st2["positions"][r] = empty_position()
+        begin_round(st2, 1)
+        add_claims(st2, {
+            "role": "contrarian", "round": 1, "position": "未验证的都要盘问",
+            "claims": [{"id": "C1-1", "text": "这句话的「应该」没有证据",
+                        "basis": "empirical", "evidence": "原文片段"}],
+            "epistemic_status": {"confidence": 60, "uncertainty_points": ["可能过度盘问"],
+                                 "will_revise_if": "对方给出可复现证据"},
+        })
+        check(st2["claims"][0]["id"] == "C1-1", "社区角色 claim 可登记进状态")
+        # challenge 编号与 claim 前缀共用 C，但格式不同，不应互相干扰
+        begin_round(st2, 2)
+        add_claims(st2, {
+            "role": "civilian", "round": 2, "position": "我要点 4 次才能提交",
+            "claims": [{"id": "V2-1", "text": "第 3 步要填 7 个字段",
+                        "basis": "empirical", "evidence": "实测"}],
+            "responses": [{"to": "C1-1", "type": "challenge", "text": "你盘问的是哪个词"}],
+            "epistemic_status": {"confidence": 55, "uncertainty_points": ["样本只有我"],
+                                 "will_revise_if": "出现真实用户数据"},
+        })
+        ch = st2["open_challenges"][0]
+        check(ch["id"].startswith("C") and "-" not in ch["id"],
+              "challenge 编号仍是 C1 形式，与 claim C1-1 不混淆")
+        check(any(c["id"] == "V2-1" for c in st2["claims"]), "civilian claim 可登记")
+        save_state(p2, st2)
+        check(load_state(p2)["roles"][-2:] == ["contrarian", "civilian"], "社区角色可持久化")
 
     print("selftest OK" if ok else "selftest FAILED", file=sys.stderr)
     return 0 if ok else 1

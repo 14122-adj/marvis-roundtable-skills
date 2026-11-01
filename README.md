@@ -4,11 +4,15 @@
 
 一句话：**讨论机制从角色提示词里抽出来交给编排层；角色只负责自己的思维协议。**
 
-- 版本：**v1.5.0**（P0–P9）；`ultimate-roundtable` **v4.1.0**、`host-bootstrap` **v3.0.0** 按上游 spec 独立发版
-- 形态：**14 个独立技能**（每个可单独导入）＋ **16 个零依赖 Python 脚本**（全部带 `--selftest`）
+- 版本：**v1.6.0**（P0–P10）；`ultimate-roundtable` **v4.1.0**、`host-bootstrap` **v3.0.0** 按上游 spec 独立发版
+- 形态：**14 个核心技能** ＋ **2 个社区角色**（`community-roles/`）＋ **16 个零依赖 Python 脚本**（全部带 `--selftest`）
 - 跨宿主：马维斯 / **Claude Code** / **Codex (ChatGPT)** / **Hermes** / Cursor / 纯文本对话
-- 验收：`tools/validate_repo.py` 107 项、`tools/run_evals.py` 36 条离线评测、两套端到端 demo
+- 验收：`tools/validate_repo.py` 117 项、`tools/run_evals.py` 36 条离线评测、两套端到端 demo
 - 语言：中文正文，字段名英文
+
+> **欢迎贡献角色**：六个人覆盖不了所有思考方式。
+> 提交新的思维协议请看 [CONTRIBUTING.md](CONTRIBUTING.md)，用 `tools/validate_role.py` 本地校验。
+> 已收录：`role-civilian`（平民视角）、`role-contrarian`（职业杠精）。
 
 ---
 
@@ -98,13 +102,19 @@ marvis-roundtable-skills/
 ├── README.md  LICENSE  CHANGELOG.md  .gitignore  .gitattributes
 ├── AGENTS.md                     ← Codex / Hermes / Cursor 等宿主的仓库级入口
 ├── CLAUDE.md                     ← Claude Code 的仓库级入口
+├── CONTRIBUTING.md               ← 如何贡献一个新角色
 ├── docs/
-│   ├── output-contract.md        ← 冻结契约 v1.5.0（含 §8 §9 §10 §11 §12）
+│   ├── output-contract.md        ← 冻结契约 v1.6.0（含 §8 §9 §10 §11 §12）
 │   └── example-session.md        ← 一次完整讨论的实录（示例数据，含脚本误报说明）
 ├── evals/
 │   └── evals.json                ← 36 条离线评测（trigger / command / artifact）
+├── community-roles/              ← 社区贡献角色（独立目录、独立版本号）
+│   ├── _template/                ← 复制这个目录开始写你的角色
+│   ├── role-civilian/            平民视角（前缀 V）
+│   └── role-contrarian/          职业杠精（前缀 C）
 ├── tools/
-│   ├── validate_repo.py          ← 107 项仓库自检（结构/契约/版本/禁用写法/16 个脚本自检）
+│   ├── validate_repo.py          ← 117 项仓库自检（结构/契约/版本/禁用写法/社区角色/16 个脚本自检）
+│   ├── validate_role.py          ← 社区角色协议校验器（13 项检查）
 │   ├── run_evals.py              ← 离线评测 runner（不调用模型，--live 会明确说明）
 │   ├── package_bundle.py         ← 打包 ZIP（整包 + 逐技能），打包前校验
 │   ├── demo_session.py           ← 圆桌主线端到端演示

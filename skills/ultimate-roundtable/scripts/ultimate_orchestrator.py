@@ -43,7 +43,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from clash_analyzer import spark, survival_score  # noqa: E402
+from clash_analyzer import (civilian_audit, spark, survival_score)  # noqa: E402
 from memory_store import intro as memory_intro, recall as memory_recall  # noqa: E402
 from memory_store import remember as memory_remember  # noqa: E402
 from memory_store import resolve_store as memory_store_path  # noqa: E402
@@ -1001,6 +1001,16 @@ def check(state: dict) -> dict:
     if surv.get("band") == "low":
         warnings.append(f"沙盘存活率 {surv.get('survival_rate')}% 属 low 分档：建议补 Need Info")
 
+    # V1.6 · 平民视角审计：精英共识时提示召唤
+    civ = civilian_audit(state)
+    if civ["should_summon"]:
+        warnings.append(
+            f"精英视角盲区：{'；'.join(civ['reasons'])}。"
+            f"建议召唤 {'、'.join(civ['suggested_roles'])}"
+            f"（clash_analyzer.py civilian 可查看详情）")
+    for qp in civ["quality_problems"]:
+        warnings.append(f"平民角色「{qp['role']}」发言缺 {qp['missing']}：{qp['note']}")
+
     return {
         "needs_judgment": True,
         "stages_done": done,
@@ -1012,6 +1022,7 @@ def check(state: dict) -> dict:
         "survival_rate": surv.get("survival_rate"),
         "sparked": sp.get("sparked"),
         "fused": bool(state.get("fused")),
+        "civilian_audit": civ,
         "ready_to_report": not issues,
         "verdict": "ready" if not issues else "not_ready",
     }
@@ -1454,6 +1465,10 @@ def selftest() -> int:
         half = new_state("半成品")
         c2 = check(half)
         ck(c2["ready_to_report"] is False and len(c2["issues"]) >= 4, "半成品被判定为不可交付")
+
+        # V1.6 · 平民视角审计接入 check()
+        ck("civilian_audit" in c, "check() 输出平民视角审计")
+        ck(c["civilian_audit"]["civilian_summoned"] == [], "演示状态下未召唤平民角色")
 
         # ---- CLI 端到端 ----
         cli_state = Path(td) / "cli.json"

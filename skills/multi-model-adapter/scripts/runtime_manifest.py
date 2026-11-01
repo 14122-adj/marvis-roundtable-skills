@@ -33,11 +33,14 @@ from datetime import datetime
 from pathlib import Path
 
 ROLE_PREFIX = {"musk": "M", "feynman": "F", "munger": "G", "jobs": "J", "karpathy": "K", "pg": "P"}
+# 社区贡献角色（community-roles/），与 state_manager.py 的前缀注册表保持一致
+ROLE_PREFIX.update({"civilian": "V", "contrarian": "C"})
 PREFIX_ROLE = {v: k for k, v in ROLE_PREFIX.items()}
 BASIS_ENUM = ["physical_constraint", "empirical", "case", "mechanism", "analogy",
               "value_judgment", "intuition"]
 RESPONSE_TYPES = ["support", "challenge", "refine", "adopt", "ignore_with_reason"]
-CLAIM_ID_RE = re.compile(r"^([MFGJKP])(\d+)-(\d+)$")
+# 前缀从 ROLE_PREFIX 动态生成，新增角色无需改正则
+CLAIM_ID_RE = re.compile(rf"^([{''.join(sorted(set(PREFIX_ROLE)))}])(\d+)-(\d+)$")
 CONTRACT_FIELDS = ["role", "round", "position", "claims", "responses", "blind_spot_declared",
                    "epistemic_status", "confidence", "uncertainty_points", "will_revise_if"]
 ROUND_PHASE = {1: ("opening", "parallel_isolated"), 2: ("probing", "cross_exam"),

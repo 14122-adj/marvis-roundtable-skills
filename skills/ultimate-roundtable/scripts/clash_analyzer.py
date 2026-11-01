@@ -23,8 +23,9 @@
      见 `survival_score()` 的注释。
 
 用法：
-  python clash_analyzer.py spark --state S [--round 2] [--write]
+  python clash_analyzer.py spark    --state S [--round 2] [--write]
   python clash_analyzer.py survival --state S [--scenario sandbox.json] [--write]
+  python clash_analyzer.py civilian --state S [--write]     # 平民视角审计（V1.6）
   python clash_analyzer.py selftest
 """
 
@@ -33,6 +34,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -54,6 +56,35 @@ SURVIVAL_WEIGHTS = {
     "evidence_coverage": 0.25, # 关键假设被证据覆盖的比例
     "defense_quality": 0.20,   # 攻击是否被有效回应
     "plan_integrity": 0.15,    # 方案完整性：是否有明确的 Do/Don't/Need Info 支撑
+}
+
+# --------------------------------------------------------------------------- #
+# 平民视角审计（V1.6）
+#
+# 六个角色全是精英视角。他们全票通过时，往往意味着共享同一个盲区——
+# 因为"要每天用它的人"根本不在桌上。
+# 本模块不判断方案好坏，只回答一个问题：这场讨论有没有漏掉使用者视角。
+# --------------------------------------------------------------------------- #
+
+# 平民视角的召唤对象（与 adversarial-tactics.md §5.2 对应）
+CIVILIAN_ROLES = {
+    "小白用户": "第一次接触的人，只关心能不能用起来",
+    "愤怒的客户": "被某个环节激怒的人，关心出错时有没有人管",
+    "一线执行者": "真正多干活的人，关心成本转嫁给谁",
+    "一线客服": "承接承诺的人，关心高峰期接不接得住",
+}
+
+# 精英盲区的语言信号：出现这些说法，说明讨论在用"应该"代替"验证"
+ELITE_BLIND_SPOT_MARKERS = [
+    "用户应该会", "用户会理解", "用户自然会", "用户学习一下",
+    "大家都能", "稍微引导", "加个引导", "看文档就行", "上手很快",
+    "显而易见", "不用解释", "这个很简单", "谁都会",
+]
+
+# 平民视角的三个必备要素（缺一即视为"代表用户说话"而非真的站在使用者位置）
+CIVILIAN_REQUIRED = {
+    "具体场景": r"(第\s*\d+\s*步|点\s*\d+\s*次|填\s*\d+\s*个|跳\s*\d+\s*个|卡在|找不到|不知道)",
+    "可量化": r"(\d+\s*次|\d+\s*个|\d+\s*步|\d+\s*秒|\d+\s*分钟|\d+\s*天)",
 }
 
 
@@ -195,6 +226,122 @@ def spark(state: dict, round_no: int = None) -> dict:
 
 
 # --------------------------------------------------------------------------- #
+# 平民视角审计（V1.6）
+# --------------------------------------------------------------------------- #
+
+
+def _all_texts(state: dict) -> list:
+    """把状态里所有可能包含"用户假设"的文本拍平。"""
+    out = []
+    for c in state.get("claims", []) or []:
+        out.append({"where": f"claim {c.get('id')}", "text": str(c.get("text", ""))})
+    for e in state.get("clash_exchanges", []) or []:
+        out.append({"where": f"exchange {e.get('from')}",
+                    "text": str(e.get("text", "")) + " " + str(e.get("inner_thought", ""))})
+    for conf in (state.get("stage1", {}) or {}).get("confessions", []) or []:
+        out.append({"where": f"stage1 {conf.get('role')}", "text": str(conf.get("text", ""))})
+    for opt in ((state.get("stage3") or {}).get("options") or {}).values():
+        if isinstance(opt, dict):
+            out.append({"where": "stage3 option", "text": str(opt.get("summary", ""))})
+    for inj in state.get("injections", []) or []:
+        out.append({"where": "injection", "text": str(inj.get("note", ""))})
+    return out
+
+
+def civilian_audit(state: dict) -> dict:
+    """审计这场讨论有没有漏掉使用者视角。
+
+    只做结构判断，不评价方案好坏：
+      1. 是否有平民视角的召唤记录；
+      2. 是否有"用户应该会……"这类以假设代替验证的表述；
+      3. 是否出现精英共识（全票通过 / 零分歧）——这是最强的召唤信号；
+      4. 已召唤的平民角色是否满足"具体场景 + 可量化"两条硬约束。
+    """
+    summons = (state.get("stage3") or {}).get("summons") or state.get("summoned_roles") or []
+    civilian_summoned = [s for s in summons
+                         if any(k in str(s.get("role", "")) for k in CIVILIAN_ROLES)]
+
+    texts = _all_texts(state)
+    blind_hits = []
+    for t in texts:
+        for marker in ELITE_BLIND_SPOT_MARKERS:
+            if marker in t["text"]:
+                blind_hits.append({"where": t["where"], "marker": marker,
+                                   "snippet": t["text"][:80]})
+                break
+
+    # 精英共识检测：所有角色立场一致 / 无分歧 / 无少数派
+    claims = state.get("claims", []) or []
+    divergences = (state.get("meta") or {}).get("divergences") or []
+    challenged = [c for c in claims if c.get("responses_received")]
+    supporters = {}
+    for c in claims:
+        for r in c.get("responses_received", []):
+            if r.get("type") in ("support", "adopt"):
+                supporters.setdefault(c.get("id"), set()).add(r.get("from"))
+    unanimous = [cid for cid, s in supporters.items()
+                 if len(s) >= max(2, len(state.get("roles", []) or []) - 1)]
+    no_dissent = (not divergences and not any(
+        r.get("type") == "challenge" for c in claims for r in c.get("responses_received", [])))
+
+    elite_consensus = bool(unanimous) or no_dissent
+
+    # 已召唤的平民角色是否合格
+    quality_problems = []
+    for s in civilian_summoned:
+        stmt = str(s.get("statement", ""))
+        for label, pattern in CIVILIAN_REQUIRED.items():
+            if not re.search(pattern, stmt):
+                quality_problems.append({
+                    "role": s.get("role"),
+                    "missing": label,
+                    "note": f"平民视角缺少「{label}」：容易退化成代表用户说话",
+                })
+        if "加个引导" in stmt or "稍微引导" in stmt:
+            quality_problems.append({
+                "role": s.get("role"),
+                "missing": "成本归属",
+                "note": "提了零成本建议：必须说明它给谁增加了什么成本",
+            })
+
+    should_summon = (elite_consensus or bool(blind_hits)) and not civilian_summoned
+    suggested = []
+    if should_summon:
+        if blind_hits:
+            suggested.append("愤怒的客户")
+        if no_dissent or unanimous:
+            suggested.append("小白用户")
+        if not suggested:
+            suggested.append("小白用户")
+
+    reasons = []
+    if unanimous:
+        reasons.append(f"出现精英全票通过（{unanimous}）：全票往往意味着共享同一盲区")
+    if no_dissent:
+        reasons.append("零分歧、零质疑：没有反对方，可能是没人从使用者角度看过")
+    if blind_hits:
+        reasons.append(f"发现 {len(blind_hits)} 处「以假设代替验证」的表述")
+
+    return {
+        "needs_judgment": True,
+        "civilian_summoned": [s.get("role") for s in civilian_summoned],
+        "civilian_missing": not civilian_summoned,
+        "should_summon": should_summon,
+        "suggested_roles": suggested,
+        "elite_consensus": elite_consensus,
+        "unanimous_claims": unanimous,
+        "no_dissent": no_dissent,
+        "blind_spot_hits": blind_hits[:6],
+        "blind_spot_count": len(blind_hits),
+        "quality_problems": quality_problems,
+        "reasons": reasons,
+        "available_civilian_roles": CIVILIAN_ROLES,
+        "note": ("平民视角审计只检查「有没有人从使用者角度看过」，"
+                 "不评价方案好坏；建议召唤不等于必须召唤，由主持人判断。"),
+    }
+
+
+# --------------------------------------------------------------------------- #
 # 存活率模型
 # --------------------------------------------------------------------------- #
 
@@ -308,6 +455,17 @@ def survival_score(scenario: dict) -> dict:
 # --------------------------------------------------------------------------- #
 # CLI
 # --------------------------------------------------------------------------- #
+
+
+def cmd_civilian(args) -> int:
+    st = load_state(args.state)
+    result = civilian_audit(st)
+    if args.write:
+        st.setdefault("stage3", {})["civilian_audit"] = result
+        save_state(args.state, st)
+        log(f"已写回 civilian_audit：should_summon={result['should_summon']}")
+    emit(result)
+    return 0
 
 
 def cmd_spark(args) -> int:
@@ -457,12 +615,71 @@ def selftest() -> int:
     ck(survival_score(normalize_scenario({"plan": "只有名字"}))["survival_rate"] == 0,
        "只有方案名时不会崩溃，存活率为 0")
 
+    # ---------- 平民视角审计（V1.6）----------
+    # 精英全票通过 + 出现"用户应该会"表述 → 应召唤平民角色
+    elite = {
+        "roles": ["musk", "pg", "jobs"],
+        "claims": [
+            {"id": "M1-1", "role": "musk", "text": "方案成本可控",
+             "responses_received": [{"from": "pg", "type": "support"},
+                                    {"from": "jobs", "type": "support"}]},
+            {"id": "J1-1", "role": "jobs", "text": "用户应该会喜欢这个简化",
+             "responses_received": []},
+        ],
+        "meta": {"divergences": []},
+        "stage1": {"confessions": [{"role": "jobs", "text": "加个引导用户就会用了"}]},
+        "stage3": {"summons": []},
+    }
+    ca = civilian_audit(elite)
+    ck(ca["elite_consensus"] is True, "全票通过被识别为精英共识")
+    ck(ca["should_summon"] is True, "精英共识时建议召唤平民角色")
+    ck(ca["blind_spot_count"] >= 1, "「用户应该会」被识别为盲区表述")
+    ck(ca["civilian_missing"] is True, "未召唤平民角色时标记缺失")
+    ck("小白用户" in ca["suggested_roles"], "建议里包含小白用户")
+
+    # 已召唤且合格 → 不再建议
+    good_summon = {
+        "roles": ["musk", "pg"],
+        "claims": [{"id": "M1-1", "role": "musk", "text": "成本可控",
+                    "responses_received": [{"from": "pg", "type": "support"}]}],
+        "meta": {"divergences": []},
+        "stage3": {"summons": [{"role": "小白用户",
+                                "statement": "我要点 4 次才能提交，第 3 步要填 7 个字段"}]},
+    }
+    ca2 = civilian_audit(good_summon)
+    ck(ca2["civilian_summoned"] == ["小白用户"], "平民召唤被识别")
+    ck(ca2["should_summon"] is False, "已召唤且合格时不再建议")
+    ck(ca2["quality_problems"] == [], "合格平民发言不报质量问题")
+
+    # 平民发言不合格：无具体场景、无数字
+    bad_summon = {
+        "roles": ["musk"], "claims": [],
+        "meta": {"divergences": []},
+        "stage3": {"summons": [{"role": "小白用户",
+                                "statement": "用户会觉得复杂，建议加个引导"}]},
+    }
+    ca3 = civilian_audit(bad_summon)
+    missing = {p["missing"] for p in ca3["quality_problems"]}
+    ck("具体场景" in missing and "可量化" in missing, "空泛的平民发言被标出缺场景与缺数字")
+    ck("成本归属" in missing, "「加个引导」被标出成本归属问题")
+
+    # 有分歧时不触发全票信号
+    divided = {
+        "roles": ["musk", "pg"],
+        "claims": [{"id": "M1-1", "role": "musk", "text": "成本可控",
+                    "responses_received": [{"from": "pg", "type": "challenge"}]}],
+        "meta": {"divergences": [{"id": "D1", "type": "fact"}]},
+        "stage3": {"summons": []},
+    }
+    ca4 = civilian_audit(divided)
+    ck(ca4["elite_consensus"] is False, "存在分歧与质疑时不判为精英共识")
+
     print("selftest OK" if ok else "selftest FAILED", file=sys.stderr)
     return 0 if ok else 1
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description="终极圆桌：火花检测与存活率评估")
+    ap = argparse.ArgumentParser(description="终极圆桌：火花检测、存活率评估与平民视角审计")
     sub = ap.add_subparsers(dest="cmd", required=True)
     ps = sub.add_parser("spark")
     ps.add_argument("--state", required=True)
@@ -473,6 +690,9 @@ def main(argv=None) -> int:
     pv.add_argument("--state")
     pv.add_argument("--scenario")
     pv.add_argument("--write", action="store_true")
+    pc = sub.add_parser("civilian", help="平民视角审计（V1.6）")
+    pc.add_argument("--state", required=True)
+    pc.add_argument("--write", action="store_true")
     sub.add_parser("selftest")
     args = ap.parse_args(argv)
 
@@ -480,6 +700,8 @@ def main(argv=None) -> int:
         return cmd_spark(args)
     if args.cmd == "survival":
         return cmd_survival(args)
+    if args.cmd == "civilian":
+        return cmd_civilian(args)
     return selftest()
 
 

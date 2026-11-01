@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import subprocess
 import sys
@@ -33,9 +34,14 @@ CORE_SKILLS = ["roundtable-orchestrator", "meta-supervisor", "position-evolution
                "ultimate-roundtable", "host-bootstrap"]
 ROLE_SKILLS = ["role-musk", "role-feynman", "role-munger", "role-jobs", "role-karpathy", "role-pg"]
 ALL_SKILLS = CORE_SKILLS + ROLE_SKILLS
-EXPECTED_VERSION = "1.5.0"
+EXPECTED_VERSION = "1.6.0"
 # 版本例外：这两个技能按上游 spec 独立发版，不参与统一版本对齐
 VERSION_OVERRIDES = {"ultimate-roundtable": "4.1.0", "host-bootstrap": "3.0.0"}
+
+# 社区贡献角色：独立目录、独立版本号（1.0.0 起），不参与统一版本对齐。
+# 它们的合规性由 tools/validate_role.py 负责（更严格的 13 项检查）。
+COMMUNITY_DIR = ROOT / "community-roles"
+COMMUNITY_PREFIXES = {"V": "role-civilian", "C": "role-contrarian"}
 
 # 不得出现在文档里的真实模型名（本包一律用占位符或 unspecified）
 FABRICATED_MODEL_RE = re.compile(
@@ -107,10 +113,18 @@ SCRIPTS = [
 
 ROOT_FILES = [
     "README.md", "LICENSE", "CHANGELOG.md", ".gitignore",
-    "AGENTS.md", "CLAUDE.md",
+    "AGENTS.md", "CLAUDE.md", "CONTRIBUTING.md",
     "docs/output-contract.md", "docs/example-session.md",
-    "tools/validate_repo.py", "tools/demo_session.py", "tools/demo_ultimate.py",
+    "tools/validate_repo.py", "tools/validate_role.py",
+    "tools/demo_session.py", "tools/demo_ultimate.py",
     "tools/run_evals.py", "tools/package_bundle.py", "evals/evals.json",
+]
+
+COMMUNITY_FILES = [
+    "community-roles/role-civilian/SKILL.md",
+    "community-roles/role-civilian/references/plain-user-checklist.md",
+    "community-roles/role-contrarian/SKILL.md",
+    "community-roles/role-contrarian/references/assumption-attack-guide.md",
 ]
 
 # 禁用写法：命中后还要看是否处在"否定语境"里（如"禁止出现本轮必须一对一轮流"）
@@ -127,6 +141,10 @@ FORBIDDEN = [
 ]
 NEGATION = ("禁止", "不得", "不设", "废除", "❌", "不是", "不要", "反向", "旧", "原方案", "取消",
             "人为硬规定", "换成", "错误做法", "反模式")
+
+# 规则清单式行：整行在描述"什么不允许"，其中的禁用样例是引用而非实际用法。
+# 例：CONTRIBUTING.md 的自查清单「不含 `../` 跨目录相对引用」「不写「本轮必须一对一轮流」」
+RULE_LINE = ("不含", "不写", "不得出现", "禁止出现", "不允许", "自查", "- [ ]")
 
 results = []
 
@@ -152,6 +170,8 @@ def main() -> int:
 
     # 1) 文件结构
     for rel in ROOT_FILES:
+        check("结构", rel, (ROOT / rel).is_file())
+    for rel in COMMUNITY_FILES:
         check("结构", rel, (ROOT / rel).is_file())
     for skill in ALL_SKILLS:
         d = SKILLS / skill
@@ -196,8 +216,10 @@ def main() -> int:
     check("版本一致", f"契约抬头含 v{EXPECTED_VERSION}", EXPECTED_VERSION in contract_head,
           contract_head if EXPECTED_VERSION not in contract_head else "")
 
-    # 禁用写法扫描（SKILL.md + references + docs）
-    targets = list(ROOT.glob("skills/**/*.md")) + list(ROOT.glob("docs/*.md")) + [ROOT / "README.md"]
+    # 禁用写法扫描（SKILL.md + references + docs + community-roles）
+    targets = (list(ROOT.glob("skills/**/*.md")) + list(ROOT.glob("docs/*.md"))
+               + list(ROOT.glob("community-roles/**/*.md"))
+               + [ROOT / "README.md", ROOT / "CONTRIBUTING.md"])
     for path in targets:
         if not path.exists():
             continue
@@ -206,11 +228,40 @@ def main() -> int:
                 if re.search(pattern, line):
                     if any(w in line for w in NEGATION):
                         continue  # 否定语境，属于正确用法
+                    if any(w in line for w in RULE_LINE):
+                        continue  # 规则清单在描述"什么不允许"，属引用
                     check("禁用写法", f"{path.relative_to(ROOT)}:{lineno}", False, f"{label} → {line.strip()[:60]}")
             m = FABRICATED_MODEL_RE.search(line)
             if m and not any(w in line for w in NEGATION + ("占位符", "placeholder", "unspecified")):
                 check("禁用写法", f"{path.relative_to(ROOT)}:{lineno}", False,
                       f"疑似编造真实模型名 {m.group(0)} → {line.strip()[:60]}")
+
+    # 5b) 社区角色：交给 validate_role.py 做 13 项专项检查（含前缀冲突）
+    vr = ROOT / "tools" / "validate_role.py"
+    if vr.is_file() and COMMUNITY_DIR.exists():
+        dirs = sorted(d for d in COMMUNITY_DIR.glob("role-*") if d.is_dir())
+        if dirs:
+            proc = subprocess.run([sys.executable, str(vr), "--all", "--json"],
+                                  capture_output=True, text=True,
+                                  encoding="utf-8", errors="replace")
+            try:
+                payload = json.loads(proc.stdout or "{}")
+            except json.JSONDecodeError:
+                payload = {}
+            results_by_role = {r["role"]: r for r in payload.get("results", [])}
+            for d in dirs:
+                r = results_by_role.get(d.name, {})
+                errs = [e["code"] for e in r.get("errors", [])]
+                check("社区角色", d.name, bool(r.get("ok")),
+                      f"errors={errs}" if errs else "")
+            # 前缀不得重复
+            prefixes = [r.get("id_prefix") for r in payload.get("results", [])]
+            dup = {p for p in prefixes if p and prefixes.count(p) > 1}
+            check("社区角色", "id 前缀无重复", not dup, f"重复前缀：{dup}" if dup else "")
+            # 声明的前缀表与实际一致
+            actual = {r.get("id_prefix"): r.get("role") for r in payload.get("results", [])}
+            check("社区角色", "COMMUNITY_PREFIXES 与实际一致", actual == COMMUNITY_PREFIXES,
+                  f"实际={actual} 声明={COMMUNITY_PREFIXES}" if actual != COMMUNITY_PREFIXES else "")
 
     # 6) 脚本自检
     if not args.no_scripts:
