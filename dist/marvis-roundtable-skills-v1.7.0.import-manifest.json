@@ -1,0 +1,278 @@
+{
+  "bundle": "marvis-roundtable-skills-v1.7.0",
+  "version": "1.7.0",
+  "built_at": "2026-11-01T13:56:12",
+  "skill_count": 14,
+  "community_role_count": 2,
+  "extra_file_count": 21,
+  "import_order": [
+    "host-bootstrap",
+    "roundtable-orchestrator",
+    "meta-supervisor",
+    "position-evolution",
+    "decision-landscape",
+    "role-musk",
+    "role-feynman",
+    "role-munger",
+    "role-jobs",
+    "role-karpathy",
+    "role-pg",
+    "cognitive-noise",
+    "multi-model-adapter",
+    "ultimate-roundtable"
+  ],
+  "skills": [
+    {
+      "skill": "cognitive-noise",
+      "dir": "skills/cognitive-noise",
+      "name": "cognitive-noise",
+      "version": "1.7.0",
+      "layer": "Layer 5 · 认知噪声（可选）",
+      "description": "轻量认知噪声层（默认关闭）：为圆桌角色注入三种可控的不完美——选择性注意（只看见部分历史并必须声明忽略了什么）、表达偏好（先说结论/先说顾虑/保守/冒险四档）、置信度传导（低置信度必须带保留语气，高置信度必须自陈可能错在哪）。当用户觉得讨论太干净太理性、要求模拟真人的表达质感与不确定性，或 roundtable-orchestrator 在 mode=simulation 下需要注入噪声时，必须使用本技能。仅在 simulation 模式下可用。",
+      "files": [
+        "skills/cognitive-noise/references/cognitive-noise-guide.md",
+        "skills/cognitive-noise/scripts/noise_injector.py",
+        "skills/cognitive-noise/SKILL.md"
+      ],
+      "file_count": 3,
+      "lines": 770
+    },
+    {
+      "skill": "decision-landscape",
+      "dir": "skills/decision-landscape",
+      "name": "decision-landscape",
+      "version": "1.7.0",
+      "layer": "Layer 4 · 输出聚合",
+      "description": "圆桌讨论的最终聚合层：把讨论状态与元认知报告整合成结构化的决策景观，包含共识区（带共识强度）、分歧区（带事实/价值/术语/伪分歧类型与消解路径）、隐性假设清单、决策建议（按高置信度/中等/需补充信息分级）、信息缺口清单，以及少数派观点保护。当用户要求汇总一场圆桌讨论的结论、需要决策报告、问「这些讨论最后得出什么」「哪些结论能用、哪些还缺信息」，或 roundtable-orchestrator 在讨论关闭后调用聚合层时，必须使用本技能。",
+      "files": [
+        "skills/decision-landscape/references/output-templates.md",
+        "skills/decision-landscape/scripts/synthesis_generator.py",
+        "skills/decision-landscape/SKILL.md"
+      ],
+      "file_count": 3,
+      "lines": 1018
+    },
+    {
+      "skill": "host-bootstrap",
+      "dir": "skills/host-bootstrap",
+      "name": "host-bootstrap",
+      "version": "3.0.0",
+      "layer": "Layer -1 · 宿主适配（前置）",
+      "description": "跨 AI 宿主的技能自检与自动部署：检测当前运行在 Claude Code / Codex / Hermes / 马维斯 / 其他环境，校验六个角色技能（role-musk/feynman/munger/jobs/karpathy/pg）是否就绪，缺失时从本地仓库或 GitHub 自动补齐。当用户要求把圆桌技能接入别的 AI、换一个客户端使用、或某个角色技能报缺失/不生效时，必须使用本技能。",
+      "files": [
+        "skills/host-bootstrap/references/host-matrix.md",
+        "skills/host-bootstrap/scripts/bootstrap.py",
+        "skills/host-bootstrap/SKILL.md"
+      ],
+      "file_count": 3,
+      "lines": 810
+    },
+    {
+      "skill": "meta-supervisor",
+      "dir": "skills/meta-supervisor",
+      "name": "meta-supervisor",
+      "version": "1.7.0",
+      "layer": "Layer 2 · 元认知监督",
+      "description": "圆桌讨论的元认知监督者：不参与议题站队，专门挖掘所有人共同默认却从未论证的隐性假设、区分事实/价值/术语/伪分歧、标记信息缺口、筛查逻辑谬误，并把结论作为下一轮的强制输入。当用户要求挖掘讨论的底层前提、复盘一场讨论的质量、问「我们是不是在争论伪问题」「这场讨论的根本分歧是什么」，或 roundtable-orchestrator 在每轮结束后调用元认知层时，必须使用本技能。",
+      "files": [
+        "skills/meta-supervisor/references/metacognitive-checklist.md",
+        "skills/meta-supervisor/scripts/assumption_extractor.py",
+        "skills/meta-supervisor/scripts/divergence_classifier.py",
+        "skills/meta-supervisor/scripts/fallacy_detector.py",
+        "skills/meta-supervisor/SKILL.md"
+      ],
+      "file_count": 5,
+      "lines": 1344
+    },
+    {
+      "skill": "multi-model-adapter",
+      "dir": "skills/multi-model-adapter",
+      "name": "multi-model-adapter",
+      "version": "1.7.0",
+      "layer": "Layer 6 · 异构基座（可选）",
+      "description": "异构基座适配层：同一底座模型的认知偏见是共通的，本技能把每个角色编译成独立的调用包（提示骨架 + 上下文 + 输出契约 + 隔离要求），交给支持多 provider 的宿主分别执行，再把结果合回同一个讨论状态。当用户要求用不同模型跑同一个圆桌、担心多角色共享同一基座而盲区一致、需要跨模型交叉验证，或 roundtable-orchestrator 要把角色分发到不同模型时，必须使用本技能。",
+      "files": [
+        "skills/multi-model-adapter/references/provider-assignment-guide.md",
+        "skills/multi-model-adapter/scripts/runtime_manifest.py",
+        "skills/multi-model-adapter/SKILL.md"
+      ],
+      "file_count": 3,
+      "lines": 891
+    },
+    {
+      "skill": "position-evolution",
+      "dir": "skills/position-evolution",
+      "name": "position-evolution",
+      "version": "1.7.0",
+      "layer": "Layer 3 · 观点迭代",
+      "description": "圆桌讨论的立场演化机制：判定角色什么时候、以多大幅度修正自己的观点，记录 from/to/trigger，并阻止无新证据的从众漂移。当用户要求在讨论中允许角色被说服、需要记录某角色观点如何变化，或 roundtable-orchestrator 处理角色发言中的 revision 块、刷新下一轮立场基线时，必须使用本技能。",
+      "files": [
+        "skills/position-evolution/references/revision-protocols.md",
+        "skills/position-evolution/scripts/revision_tracker.py",
+        "skills/position-evolution/SKILL.md"
+      ],
+      "file_count": 3,
+      "lines": 659
+    },
+    {
+      "skill": "role-feynman",
+      "dir": "skills/role-feynman",
+      "name": "role-feynman",
+      "version": "1.7.0",
+      "layer": "Layer 1 · 角色思维协议",
+      "description": "以费曼技巧为硬约束的圆桌角色技能：任何论点必须能用外行听懂的一句话解释，否则标记为未理解的伪理解。当用户要求以费曼式视角参与圆桌讨论、检查某个说法是否真的被理解、或 roundtable-orchestrator 调用 feynman 角色发言时，必须使用本技能。",
+      "files": [
+        "skills/role-feynman/references/explanation-verification.md",
+        "skills/role-feynman/SKILL.md"
+      ],
+      "file_count": 2,
+      "lines": 375
+    },
+    {
+      "skill": "role-jobs",
+      "dir": "skills/role-jobs",
+      "name": "role-jobs",
+      "version": "1.7.0",
+      "layer": "Layer 1 · 角色思维协议",
+      "description": "以产品纯粹性追问为硬约束的圆桌角色技能：每个决策都要回答让事情更简单还是更复杂，拒绝把因为一直这样做当理由。当用户要求以乔布斯式产品视角参与圆桌讨论、需要做减法与体验倒推，或 roundtable-orchestrator 调用 jobs 角色发言时，必须使用本技能。",
+      "files": [
+        "skills/role-jobs/references/simplicity-criteria.md",
+        "skills/role-jobs/SKILL.md"
+      ],
+      "file_count": 2,
+      "lines": 432
+    },
+    {
+      "skill": "role-karpathy",
+      "dir": "skills/role-karpathy",
+      "name": "role-karpathy",
+      "version": "1.7.0",
+      "layer": "Layer 1 · 角色思维协议",
+      "description": "以系统分解与可复现性检查为硬约束的圆桌角色技能：把问题拆成可独立验证的子模块，逐条检查论断是否有可复现的证据链。当用户要求以工程/机器学习系统视角参与圆桌讨论、需要模块化拆解与证据链审查，或 roundtable-orchestrator 调用 karpathy 角色发言时，必须使用本技能。",
+      "files": [
+        "skills/role-karpathy/references/system-decomposition-guide.md",
+        "skills/role-karpathy/SKILL.md"
+      ],
+      "file_count": 2,
+      "lines": 349
+    },
+    {
+      "skill": "role-munger",
+      "dir": "skills/role-munger",
+      "name": "role-munger",
+      "version": "1.7.0",
+      "layer": "Layer 1 · 角色思维协议",
+      "description": "以逆向思维加多元思维模型为硬约束的圆桌角色技能：先问怎么做才能让这件事彻底失败，再用至少两个不同学科模型交叉分析。当用户要求以芒格式视角参与圆桌讨论、需要风险倒推与跨学科交叉验证，或 roundtable-orchestrator 调用 munger 角色发言时，必须使用本技能。",
+      "files": [
+        "skills/role-munger/references/mental-models-catalog.md",
+        "skills/role-munger/SKILL.md"
+      ],
+      "file_count": 2,
+      "lines": 416
+    },
+    {
+      "skill": "role-musk",
+      "dir": "skills/role-musk",
+      "name": "role-musk",
+      "version": "1.7.0",
+      "layer": "Layer 1 · 角色思维协议",
+      "description": "以第一性原理拆解为硬约束的圆桌角色技能。当用户要求以马斯克式第一性原理视角参与多角色圆桌讨论、需要把问题拆到最底层事实再向上推理，或 roundtable-orchestrator 调用 musk 角色发言时，必须使用本技能。",
+      "files": [
+        "skills/role-musk/references/first-principles-examples.md",
+        "skills/role-musk/SKILL.md"
+      ],
+      "file_count": 2,
+      "lines": 362
+    },
+    {
+      "skill": "role-pg",
+      "dir": "skills/role-pg",
+      "name": "role-pg",
+      "version": "1.7.0",
+      "layer": "Layer 1 · 角色思维协议",
+      "description": "以从具体案例归纳为硬约束的圆桌角色技能：拒绝从抽象原则出发，先给出至少一个真实案例再从案例提炼模式。当用户要求以 Paul Graham 式创业/写作视角参与圆桌讨论、需要案例驱动的归纳推理，或 roundtable-orchestrator 调用 pg 角色发言时，必须使用本技能。",
+      "files": [
+        "skills/role-pg/references/case-based-reasoning.md",
+        "skills/role-pg/SKILL.md"
+      ],
+      "file_count": 2,
+      "lines": 320
+    },
+    {
+      "skill": "roundtable-orchestrator",
+      "dir": "skills/roundtable-orchestrator",
+      "name": "roundtable-orchestrator",
+      "version": "1.7.0",
+      "layer": "Layer 0 · 编排引擎",
+      "description": "多角色圆桌讨论的编排引擎：调度角色思维协议、元认知监督者与立场迭代，按目标驱动推进多轮讨论并产出决策景观素材。当用户要求组织多角色圆桌讨论、让不同视角就同一问题交叉论证，或说「开启圆桌讨论」「让几个角色辩一辩」「多视角会诊」「圆桌推演」「让马斯克/费曼/芒格/乔布斯/Karpathy/Paul Graham 一起讨论」时，必须使用本技能。",
+      "files": [
+        "skills/roundtable-orchestrator/references/interaction-protocols.md",
+        "skills/roundtable-orchestrator/scripts/convergence_detector.py",
+        "skills/roundtable-orchestrator/scripts/round_controller.py",
+        "skills/roundtable-orchestrator/scripts/state_manager.py",
+        "skills/roundtable-orchestrator/SKILL.md"
+      ],
+      "file_count": 5,
+      "lines": 1808
+    },
+    {
+      "skill": "ultimate-roundtable",
+      "dir": "skills/ultimate-roundtable",
+      "name": "ultimate-roundtable",
+      "version": "4.1.0",
+      "layer": "Layer 0+ · 高强度审议（ultimate）",
+      "description": "终极专家圆桌机制 V4.1：引入注意力分舱、语义级死锁检测强制收敛与颗粒度执行指标，从深度推演走向绝对落地的战术指挥部。当用户要求开启终极圆桌、深度推演讨论、红蓝对抗圆桌、战术推演圆桌，或需要在一场高冲突讨论后拿到带负责人/KPI/止损点的战术级行动清单时，必须使用本技能。",
+      "files": [
+        "skills/ultimate-roundtable/references/adversarial-tactics.md",
+        "skills/ultimate-roundtable/references/report-template.md",
+        "skills/ultimate-roundtable/references/tactical-playbook.md",
+        "skills/ultimate-roundtable/references/tool-protocol.md",
+        "skills/ultimate-roundtable/scripts/attention_split.py",
+        "skills/ultimate-roundtable/scripts/clash_analyzer.py",
+        "skills/ultimate-roundtable/scripts/deadlock_detector.py",
+        "skills/ultimate-roundtable/scripts/memory_store.py",
+        "skills/ultimate-roundtable/scripts/ultimate_orchestrator.py",
+        "skills/ultimate-roundtable/SKILL.md"
+      ],
+      "file_count": 10,
+      "lines": 4968
+    }
+  ],
+  "files": [
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "AGENTS.md",
+    "CLAUDE.md",
+    "CONTRIBUTING.md",
+    "QUICKSTART.md",
+    "docs/output-contract.md",
+    "docs/example-session.md",
+    "docs/agensi-listing.md"
+  ],
+  "dirs": [
+    "community-roles",
+    "templates",
+    "tools",
+    "evals"
+  ],
+  "start_here": "START-HERE.md",
+  "quickstart_commands": [
+    "python tools/quickstart.py          # 一条命令跑通（约 10 秒）",
+    "python tools/wizard.py              # 交互式生成你自己的 5 个阶段配置",
+    "python tools/validate_repo.py       # 仓库自检"
+  ],
+  "import_steps": [
+    "1) 先读 START-HERE.md（30 秒）",
+    "2) 跑 python tools/quickstart.py 确认环境可用",
+    "3) 逐个导入技能：马维斯 → 技能管理 → 本地技能 → 导入技能 → 选择 SKILL.md",
+    "4) 导入顺序见 import_order（先 host-bootstrap 与编排层，再角色，最后可选层）",
+    "5) 导入后说「开启终极圆桌」验证可触发"
+  ],
+  "notes": [
+    "技能之间不使用跨目录相对引用，可单独导入",
+    "scripts/ 需要宿主能执行 Python（仅用标准库）",
+    "cognitive-noise 仅在 mode=simulation 下被脚本允许启用",
+    "community-roles/ 下的角色是可选增强，不装也能跑"
+  ]
+}
