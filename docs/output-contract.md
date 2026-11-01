@@ -1,4 +1,4 @@
-# 圆桌技能输出契约 v1.4.0（冻结版）
+# 圆桌技能输出契约 v1.5.0（冻结版）
 
 > 本文件是 14 个技能的**唯一契约来源**。任何 SKILL.md 中的字段名、枚举值、ID 规则都必须与本文件一致。
 > 修改本文件 = 修改契约 = 必须同步全部角色技能。改动请在 CHANGELOG 中记录版本号。
@@ -13,7 +13,10 @@
 >
 > v1.4 变更：§11 升级到 **V4.0**（北极星锚定、注意力分舱 + 150 字闸门、死锁熔断、
 > 三选一铁血裁决、战术级行动清单），报告格式改为 V4 五节。
-> `ultimate-roundtable` v4.0.0 与 `host-bootstrap` v3.0.0 按上游 spec 独立发版，不参与统一版本对齐。
+>
+> v1.5 变更：§11.5b 第 3 条重写为**语义级死锁检测**（REPEAT/PROGRESS/UNCERTAIN 三标签 +
+> 双路径熔断），熔断话术更新为「双方已陷入实质重复」。
+> `ultimate-roundtable` v4.1.0 与 `host-bootstrap` v3.0.0 按上游 spec 独立发版，不参与统一版本对齐。
 
 ---
 
@@ -589,9 +592,29 @@ survival = 0.40 × risk_residual      # 100 × (1 − 平均(severity × probabi
    - 六份分舱声明写入 `attention_splits`，每份只含 `visible`/`muted` 的 **id**，
      出现任何文本内容即判"改写原文"违规；
    - 北极星相关条目与 `must_respond`/`must_resolve` **永不被屏蔽**。
-3. **死锁熔断**（阶段二）：连续 2 轮同时满足「复读（相似度 ≥0.55）+ 无新事实 +
-   无立场修正 + 靶点未变」→ 熔断，输出固定话术并置 `debate_closed = true`；
-   此后任何 `stage2` 提交一律拒绝（退出码 3），只能进入阶段三。
+3. **语义级死锁检测**（阶段二，V4.1）：
+   - 主持人**每轮结束在内心完成判定**（不输出过程），对比本轮与上一轮发言；
+   - 判定标准：只是换说法/同义词/换例子，但**核心论点、支撑数据、推导逻辑**未变 → 语义复读；
+   - 三标签写回 `semantic_verdicts`：`REPEAT` / `PROGRESS` / `UNCERTAIN`；
+   - **放行规则**：本轮有 `PROGRESS`（新证据 / 改观点 / 针对性反驳 / 反问 / 要数据）→ 放行；
+   - **熔断规则**：`REPEAT > 0 且 PROGRESS == 0` 连续 2 轮 → 熔断；
+   - **结构兜底**：无语义判定时退回「相似度 ≥0.55 + 无新事实 + 无立场修正 + 靶点未变」；
+   - 熔断话术固定为 `[系统强制熔断] 双方已陷入实质重复，此议题直接交由最终裁决阶段处理。`
+     并置 `debate_closed = true`；此后任何 `stage2` 提交一律拒绝（退出码 3），只能进入阶段三。
+
+   `semantic_verdicts` 字段：
+
+   ```jsonc
+   [{"round": 3, "from": "munger", "to": "munger", "label": "REPEAT",
+     "reason": "换了说法，核心论点仍是切换成本被低估",
+     "pair_id": "2->3#1", "judged_by": "host-judge"}]
+   ```
+
+   `check` 输出的 `trigger` 标明命中路径（`semantic` / `structural`），
+   `semantic_coverage` 给出被判定的配对数——**每条判定都必须带 `reason`，否则无法复核**。
+
+   CLI 三件套：`judge`（生成待判材料）→ `record`（写回标签）→ `check --write`（判定并熔断）。
+   `stage2` 也支持直接携带 `semantic_verdicts` 数组，一次提交完成「对抗 + 语义判定」。
 
 ### 11.5c 三选一裁决（阶段三）
 
@@ -674,12 +697,21 @@ survival = 0.40 × risk_residual      # 100 × (1 − 平均(severity × probabi
 读的是顶层字段（便于单独调用）；沙盘（`sandbox` 子命令）写入 `stage3.sandbox`，
 **不覆盖**三选一裁决结果。
 
-### 11.7 新增脚本（V4）
+### 11.7 新增脚本（V4 / V4.1）
 
 | 脚本 | 作用 | 关键纪律 |
 |---|---|---|
 | `attention_split.py` | 分舱声明生成、150 字闸门、违规校验 | 只记录 id，绝不改写原文；北极星与强制条目永不屏蔽 |
-| `deadlock_detector.py` | 复读检测、死锁判定、强制熔断 | 四项判据全中才算死锁；熔断后 `debate_closed=true` |
+| `deadlock_detector.py` | **语义级**复读判定、双路径死锁、强制熔断 | 语义路径优先（REPEAT 且无 PROGRESS），结构路径兜底；每条判定必须带 `reason`；熔断后 `debate_closed=true` |
+
+`deadlock_detector.py` 的四个子命令：
+
+| 子命令 | 作用 | 说明 |
+|---|---|---|
+| `judge` | 生成待判材料 | 按"上一轮 vs 本轮"配对，附判定标准；支持 `--pair 2-3` |
+| `record` | 写回语义判定 | 标签归一化（`[repeat]` → `REPEAT`），非法标签拒绝 |
+| `check` | 双路径判定 | `trigger` 标明 `semantic`/`structural`；`--write` 自动熔断 |
+| `fuse` | 手动熔断 | 用于主持人主动止损 |
 
 ---
 

@@ -33,9 +33,9 @@ CORE_SKILLS = ["roundtable-orchestrator", "meta-supervisor", "position-evolution
                "ultimate-roundtable", "host-bootstrap"]
 ROLE_SKILLS = ["role-musk", "role-feynman", "role-munger", "role-jobs", "role-karpathy", "role-pg"]
 ALL_SKILLS = CORE_SKILLS + ROLE_SKILLS
-EXPECTED_VERSION = "1.4.0"
+EXPECTED_VERSION = "1.5.0"
 # 版本例外：这两个技能按上游 spec 独立发版，不参与统一版本对齐
-VERSION_OVERRIDES = {"ultimate-roundtable": "4.0.0", "host-bootstrap": "3.0.0"}
+VERSION_OVERRIDES = {"ultimate-roundtable": "4.1.0", "host-bootstrap": "3.0.0"}
 
 # 不得出现在文档里的真实模型名（本包一律用占位符或 unspecified）
 FABRICATED_MODEL_RE = re.compile(

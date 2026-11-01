@@ -49,9 +49,11 @@ from memory_store import remember as memory_remember  # noqa: E402
 from memory_store import resolve_store as memory_store_path  # noqa: E402
 from attention_split import (SPEECH_LIMIT, LENSES, char_len, check as split_check,  # noqa: E402
                              plan as split_plan, write_manifest as split_write)
-from deadlock_detector import FUSE_TEMPLATE, check as deadlock_check, fuse as deadlock_fuse  # noqa: E402
+from deadlock_detector import (FUSE_TEMPLATE, LEGACY_FUSE_TEMPLATE, check as deadlock_check,  # noqa: E402
+                               fuse as deadlock_fuse, build_judge_material,
+                               record_verdicts as deadlock_record)
 
-SCHEMA_VERSION = "4.0.0"
+SCHEMA_VERSION = "4.1.0"
 SIX_ROLES = ["musk", "feynman", "munger", "jobs", "karpathy", "pg"]
 ROLE_CN = {"musk": "马斯克", "feynman": "费曼", "munger": "芒格",
            "jobs": "乔布斯", "karpathy": "Karpathy", "pg": "Paul Graham"}
@@ -319,6 +321,8 @@ def run_stage2(state: dict, payload: dict) -> dict:
     if state.get("debate_closed"):
         die(f"辩论已被强制熔断（{state.get('fuse_message', FUSE_TEMPLATE)}）："
             f"不得再提交 stage2 交锋，请直接进入阶段三铁血裁决", 3)
+    if "stage0" not in state["stages_done"]:
+        die("必须先完成阶段零（stage0）：北极星指标未锚定前不得开始对抗", 3)
 
     camps = payload.get("camps") or {}
     blue, red = camps.get("blue") or [], camps.get("red") or []
@@ -399,7 +403,12 @@ def run_stage2(state: dict, payload: dict) -> dict:
               "action": "按 spec 强制重开一轮红蓝对抗：针对下列理由逐条补强后再次提交 stage2"})
         raise SystemExit(4)
 
-    # V4 · 死锁检测：连续两轮复读 → 强制熔断，切断发言权
+    # V4.1 · 语义级死锁检测：先接收主持人写回的语义判定，再双路径判定
+    incoming = payload.get("semantic_verdicts") or []
+    if incoming:
+        deadlock_record("", state, incoming)
+        log(f"接收 {len(incoming)} 条语义判定")
+
     dl = deadlock_check(state)
     state["stage2"]["deadlock"] = dl
     if dl.get("deadlock"):
@@ -410,22 +419,33 @@ def run_stage2(state: dict, payload: dict) -> dict:
         state["stage"] = "stage2_fused"
         emit({"stage": "stage2", "ok": True, "verdict": "deadlock_fused",
               "fuse_message": FUSE_TEMPLATE,
+              "trigger": dl.get("trigger"),
               "reasons": dl.get("reasons", []),
               "consecutive_stalled": dl.get("consecutive_stalled"),
               "deadlock": dl,
               "next": "辩论已终止，直接进入阶段三铁血裁决（三选一）"})
         return {"stage": "stage2", "ok": True, "verdict": "deadlock_fused",
                 "blue": blue, "red": red, "fused": True,
+                "trigger": dl.get("trigger"),
                 "fuse_message": FUSE_TEMPLATE, "reasons": dl.get("reasons", [])}
 
     if "stage2" not in state["stages_done"]:
         state["stages_done"].append("stage2")
     state["stage"] = "stage2_done"
+    # 放行时也把待判材料带出去：主持人应在下一轮前完成语义判定
+    judge_hint = None
+    if not dl.get("semantic_coverage", {}).get("judged_pairs"):
+        try:
+            judge_hint = build_judge_material(state)
+        except SystemExit:
+            judge_hint = None
     return {"stage": "stage2", "ok": True, "verdict": "sparked",
             "blue": blue, "red": red,
             "interrupts": len([e for e in cleaned if e["interrupt"]]),
             "verifications": len(verifications),
             "deadlock": dl,
+            "semantic_judge_required": judge_hint is not None,
+            "semantic_judge_material": judge_hint,
             "spark": sp}
 
 
@@ -1261,8 +1281,60 @@ def selftest() -> int:
         dead["revisions"] = []
         dead["stage2"] = {"verifications": []}
         dl = deadlock_check(dead)
-        ck(dl["deadlock"] is True, "两轮复读被判为死锁")
-        ck(FUSE_TEMPLATE in dl["fuse_message"], "熔断话术与 spec 一致")
+        ck(dl["deadlock"] is True, "两轮逐字复读被判为死锁（结构路径）")
+        ck(FUSE_TEMPLATE in dl["fuse_message"], "熔断话术与 V4.1 spec 一致")
+
+        # V4.1 · 语义级死锁：换说法但核心论点未变，结构路径抓不到，靠语义裁判
+        sem_state = json.loads(json.dumps(st))
+        sem_state["clash_exchanges"] = [
+            {"from": "munger", "round": 2, "target_claim": "M1-1",
+             "text": "你忽略了上下文切换成本，这一项会让预算翻倍"},
+            {"from": "munger", "round": 3, "target_claim": "M1-1",
+             "text": "协调开销你没有计入，实际支出会远超预期"},
+        ]
+        sem_state["argument_log"] = []
+        sem_state["revisions"] = []
+        sem_state["stage2"] = {"verifications": []}
+        sem_state["semantic_verdicts"] = []
+        structural = deadlock_check(sem_state)
+        ck(structural["deadlock"] is False, "换说法场景下结构路径抓不到（预期）")
+
+        sem_state["semantic_verdicts"] = [
+            {"round": 2, "from": "munger", "to": "munger", "label": "REPEAT",
+             "reason": "换词，核心论点未变"},
+            {"round": 3, "from": "munger", "to": "munger", "label": "REPEAT",
+             "reason": "同上"},
+        ]
+        semantic = deadlock_check(sem_state)
+        ck(semantic["deadlock"] is True and semantic["trigger"] == "semantic",
+           "语义 REPEAT 触发熔断（语义路径）")
+
+        # 语义 PROGRESS 时放行
+        prog_state = json.loads(json.dumps(sem_state))
+        prog_state["semantic_verdicts"] = [
+            {"round": 2, "from": "munger", "to": "munger", "label": "PROGRESS",
+             "reason": "提出新的协调开销数据"},
+            {"round": 3, "from": "munger", "to": "munger", "label": "PROGRESS"},
+        ]
+        ck(deadlock_check(prog_state)["deadlock"] is False, "语义 PROGRESS 时放行")
+
+        # stage2 可直接接收 semantic_verdicts
+        sem_in = json.loads(json.dumps(st))
+        sem_in["stages_done"] = ["stage0", "stage1"]
+        sem_in["stage2"] = {}
+        sem_payload = stage2_payload()
+        sem_payload["exchanges"] = sem_payload["exchanges"] + [
+            {"from": "munger", "round": 2, "target_claim": "M1-1",
+             "text": "协调开销你没计入，实际支出会远超预期",
+             "inner_thought": "我再说一遍，看他有没有新数据"},
+        ]
+        sem_payload["semantic_verdicts"] = [
+            {"round": 2, "from": "munger", "to": "munger", "label": "REPEAT",
+             "reason": "与上一轮同义"},
+        ]
+        run_stage2(sem_in, sem_payload)
+        ck(len(sem_in.get("semantic_verdicts", [])) == 1,
+           "stage2 可直接接收 semantic_verdicts 并写回状态")
 
         # 熔断后不得再提交 stage2
         fused_state = json.loads(json.dumps(st))
