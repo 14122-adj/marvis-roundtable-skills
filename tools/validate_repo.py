@@ -114,7 +114,7 @@ SCRIPTS = [
 ROOT_FILES = [
     "README.md", "LICENSE", "CHANGELOG.md", ".gitignore",
     "AGENTS.md", "CLAUDE.md", "CONTRIBUTING.md", "QUICKSTART.md",
-    "docs/output-contract.md", "docs/example-session.md",
+    "docs/output-contract.md", "docs/example-session.md", "docs/agensi-listing.md",
     "tools/validate_repo.py", "tools/validate_role.py",
     "tools/quickstart.py", "tools/wizard.py",
     "tools/demo_session.py", "tools/demo_ultimate.py",

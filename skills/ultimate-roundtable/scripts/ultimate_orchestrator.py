@@ -798,7 +798,7 @@ def _bullets(items, empty="（未提供）"):
 
 
 def render_report(state: dict) -> str:
-    """V4.0 冻结报告格式（五节，与 spec 逐字对应）。
+    """V4.1 冻结报告格式（五节，与 spec 逐字对应）。
 
     V4 相对 V3 的变化：
       * 新增第 1 节「北极星指标与底线假设」（全场唯一焦点）；
@@ -822,7 +822,7 @@ def render_report(state: dict) -> str:
     real_count = len([t for t in d["tool_results"] if t.get("source") == "tool"])
 
     L = []
-    L.append("### ⚔️ 终极圆桌决策报告 V4.0")
+    L.append("### ⚔️ 终极圆桌决策报告 V4.1")
     L.append("")
     L.append(f"> 议题：{d['topic']}　会话：`{d['session_id']}`")
     L.append(f"> 外部数据：真实工具调用 {real_count} 条 / 模拟 {sim_count} 条")
@@ -1436,7 +1436,7 @@ def selftest() -> int:
 
         # ---- 报告 ----
         md = render_report(st)
-        for sec in ["### ⚔️ 终极圆桌决策报告 V4.0",
+        for sec in ["### ⚔️ 终极圆桌决策报告 V4.1",
                     "#### 📌 1. 北极星指标与底线假设",
                     "#### 🔗 2. 证据链与外部验证",
                     "#### 🚦 3. 铁血裁决（三选一）",
@@ -1489,7 +1489,7 @@ def selftest() -> int:
         out_md = Path(td) / "report.md"
         with contextlib.redirect_stdout(io.StringIO()):
             main(["report", "--state", str(cli_state), "--out", str(out_md)])
-        ck(out_md.exists() and "终极圆桌决策报告 V4.0" in out_md.read_text(encoding="utf-8"),
+        ck(out_md.exists() and "终极圆桌决策报告 V4.1" in out_md.read_text(encoding="utf-8"),
            "CLI report 生成 V4 报告文件")
 
     print("selftest OK" if ok else "selftest FAILED", file=sys.stderr)

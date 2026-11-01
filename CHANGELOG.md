@@ -2,6 +2,43 @@
 
 遵循语义化版本。字段与枚举的改动一律同步 `docs/output-contract.md` 并提升契约版本号。
 
+## v1.7.1 — 2026-11-01
+
+上架准备：把打包器做到能直接产出符合 **Agensi / Claude Skills 市场规范**的单技能 ZIP。
+
+> 本次只改工具与文档，**技能版本号保持 1.7.0 不变**（契约未变）。
+
+**`package_bundle.py` 新增市场模式**
+- `market` / `--market` / `--only`：为每个技能打一个**单技能 ZIP**
+- 严格遵循市场 zip structure 规范：
+  - 单层顶层文件夹（文件夹名 = 技能名）
+  - `SKILL.md` 在该文件夹根部（不能是 zip 根，也不能双层嵌套）
+  - 无 `.DS_Store` / `Thumbs.db` / `__pycache__` / `.pyc`
+- 每个市场包自动附带一份**面向买家的 README.md**（含装法、触发示例、目录说明）
+- `verify-market`：一次校验整个 `dist/market/`，逐包检查结构与 frontmatter
+- 整包同时补齐了此前遗漏的 `community-roles/`、`templates/`、`tools/`、`evals/`
+- 整包新增 **`START-HERE.md`**（解压后第一眼看到的入口）
+
+**修复**
+- `render_report` 硬编码报告标题为「V4.0」，但 schema 已是 4.1.0 → 改为 V4.1
+- `verify()` 把 `community-roles/_template` 当成正式角色校验 → 模板不参与校验
+- 打包清单统计社区角色时把 `_template` 计入 → 已排除
+
+**新增 `docs/agensi-listing.md`**
+- 可直接复制粘贴的英文 listing 文案（标题 / 简介 / 完整描述 / tags / 触发短语）
+- 定价建议（$5 试水 → 拿到评价后再涨）
+- 上架前检查清单（12 项，含哪些我已完成、哪些必须你来做）
+
+**README 顶部**
+- 新增显眼的 QUICKSTART 入口区块与 Releases 下载指引
+- 新增「你想做什么 → 去哪」导航表
+
+**验收**
+- 127/127 仓库自检、38/38 离线评测
+- 14 个市场包 `verify-market` 全部通过
+- 解压市场包后脚本实测 `selftest OK`
+- 全库密钥扫描：未发现硬编码密钥
+
 ## v1.7.0 — 2026-11-01
 
 **10 分钟首次跑通**：把「导入 14 个技能 + 装 Python + 手写 5 个 JSON」压成一条命令。

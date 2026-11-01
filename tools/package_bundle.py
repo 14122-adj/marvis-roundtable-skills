@@ -36,7 +36,15 @@ ROOT = Path(__file__).resolve().parents[1]
 SKILLS = ROOT / "skills"
 BUNDLE_FILES = ["README.md", "LICENSE", "CHANGELOG.md",
                 "AGENTS.md", "CLAUDE.md", "CONTRIBUTING.md", "QUICKSTART.md",
-                "docs/output-contract.md", "docs/example-session.md"]
+                "docs/output-contract.md", "docs/example-session.md", "docs/agensi-listing.md"]
+
+# 除 skills/ 之外要一并打包的目录（社区角色、模板、工具、评测集）
+BUNDLE_DIRS = ["community-roles", "templates", "tools", "evals"]
+
+# 打包时排除的运行时产物与缓存
+BUNDLE_EXCLUDE_DIRS = {"__pycache__", ".git", "dist", ".quickstart", ".wizard",
+                       ".ultimate", ".roundtable", ".roundtable-demo",
+                       ".ultimate-demo", ".roundtable-memory"}
 IMPORT_ORDER = [
     "host-bootstrap",
     "roundtable-orchestrator",
@@ -49,6 +57,95 @@ IMPORT_ORDER = [
     "ultimate-roundtable",
 ]
 REQUIRED_FRONTMATTER = ["name", "description"]
+
+# ZIP 内的开箱入口文件（解压后第一眼看到）
+START_HERE_TEMPLATE = """# 从这里开始
+
+> 你拿到的是 **marvis-roundtable-skills v{version}** 的完整包
+> （{skill_count} 个核心技能 + {community_count} 个社区角色，构建于 {built_at}）。
+
+---
+
+## 最快：先跑一次看看
+
+```bash
+python tools/quickstart.py
+```
+
+约 10 秒，你会看到：体检 → 跑完一场完整的终极圆桌 → 自检 → 下一步提示。
+产物在 `.quickstart/`（`report.md` 就是一场完整的决策报告）。
+
+**只想确认环境可用**：
+
+```bash
+python tools/quickstart.py --check
+```
+
+---
+
+## 换成你自己的议题
+
+```bash
+python tools/wizard.py
+```
+
+交互式向导会问你几组问题，生成 5 个阶段的配置文件，**每步即时校验**。
+生成完会直接打印可复制的命令序列。
+
+详细路径（含三个常见卡点）：**[QUICKSTART.md](QUICKSTART.md)**
+
+---
+
+## 装进你的 AI 客户端
+
+```bash
+python skills/host-bootstrap/scripts/bootstrap.py detect    # 我在什么宿主？
+python skills/host-bootstrap/scripts/bootstrap.py install   # 补齐缺失的角色技能
+```
+
+然后按宿主导入：
+
+| 宿主 | 入口 |
+|---|---|
+| 马维斯 Marvis | 技能管理 → 本地技能 → 导入技能 → 选 `skills/*/SKILL.md` |
+| Claude Code | 读 `CLAUDE.md`，或把 `skills/` 放进 `~/.claude/skills` |
+| Codex / Hermes / Cursor | 读 `AGENTS.md`，或放进各自的 skills 目录 |
+| 纯文本对话 | 把 `SKILL.md` 内容贴进上下文，工具结果标 `simulated: true` |
+
+**导入顺序**见 `import-manifest.json` 的 `import_order` 字段：
+先 `host-bootstrap` 与编排层，再六个角色，最后可选层。
+
+---
+
+## 包里有什么
+
+```
+START-HERE.md          ← 你正在读的
+QUICKSTART.md          ← 10 分钟完整路径 + 三个常见卡点
+README.md              ← 全貌（架构、路线图、诚实声明）
+CONTRIBUTING.md        ← 怎么贡献一个新角色
+skills/                ← {skill_count} 个核心技能（每个 = SKILL.md + scripts/ + references/）
+community-roles/       ← {community_count} 个社区角色 + 模板
+templates/             ← 5 个可直接改的阶段配置示例
+tools/                 ← quickstart / wizard / 自检 / 打包 / 端到端 demo
+docs/output-contract.md ← 所有字段的唯一来源（改任何东西前先读它）
+```
+
+---
+
+## 一句话
+
+```bash
+python tools/quickstart.py     # 看它长什么样（10 秒）
+python tools/wizard.py         # 换成你的议题（5 分钟）
+```
+
+剩下都是细节。
+
+---
+
+许可：MIT。问题与建议请提 issue。
+"""
 
 
 def die(msg: str, code: int = 2):
@@ -113,6 +210,25 @@ def sha256_of(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()[:16]
 
 
+def collect_extra_files() -> list:
+    """收集 skills/ 之外的目录（community-roles / templates / tools）。"""
+    out = []
+    for d in BUNDLE_DIRS:
+        base = ROOT / d
+        if not base.is_dir():
+            log(f"警告：目录 {d} 不存在，跳过")
+            continue
+        for p in sorted(base.rglob("*")):
+            if not p.is_file():
+                continue
+            if any(part in BUNDLE_EXCLUDE_DIRS for part in p.parts):
+                continue
+            if p.suffix in (".pyc", ".pyo"):
+                continue
+            out.append(str(p.relative_to(ROOT)).replace("\\", "/"))
+    return out
+
+
 def build(version: str, out_dir: Path, per_skill: bool = False) -> dict:
     skills = collect_skills()
     names = [s["skill"] for s in skills]
@@ -120,6 +236,7 @@ def build(version: str, out_dir: Path, per_skill: bool = False) -> dict:
     if missing:
         die(f"IMPORT_ORDER 中的技能不存在：{missing}")
 
+    extra = collect_extra_files()
     out_dir.mkdir(parents=True, exist_ok=True)
     bundle_name = f"marvis-roundtable-skills-v{version}"
     zip_path = out_dir / f"{bundle_name}.zip"
@@ -129,23 +246,42 @@ def build(version: str, out_dir: Path, per_skill: bool = False) -> dict:
         "version": version,
         "built_at": datetime.now().isoformat(timespec="seconds"),
         "skill_count": len(skills),
+        "community_role_count": len([e for e in extra
+                                     if e.startswith("community-roles/")
+                                     and e.endswith("/SKILL.md")
+                                     and "_template" not in e]),
+        "extra_file_count": len(extra),
         "import_order": IMPORT_ORDER,
         "skills": skills,
         "files": BUNDLE_FILES,
+        "dirs": BUNDLE_DIRS,
+        "start_here": "START-HERE.md",
+        "quickstart_commands": [
+            "python tools/quickstart.py          # 一条命令跑通（约 10 秒）",
+            "python tools/wizard.py              # 交互式生成你自己的 5 个阶段配置",
+            "python tools/validate_repo.py       # 仓库自检",
+        ],
         "import_steps": [
-            "1) 解压后逐个导入：马维斯 → 技能管理 → 本地技能 → 导入技能 → 选择 SKILL.md",
-            "2) 导入顺序见 import_order（先编排器与元认知层，再角色，最后可选层）",
-            "3) 导入后用『开启圆桌讨论』验证编排器可触发，再单独触发一个角色技能验证字段",
-            "4) 若宿主支持 ZIP 上传：设置 → Skills → Create → Upload 选择本 zip",
+            "1) 先读 START-HERE.md（30 秒）",
+            "2) 跑 python tools/quickstart.py 确认环境可用",
+            "3) 逐个导入技能：马维斯 → 技能管理 → 本地技能 → 导入技能 → 选择 SKILL.md",
+            "4) 导入顺序见 import_order（先 host-bootstrap 与编排层，再角色，最后可选层）",
+            "5) 导入后说「开启终极圆桌」验证可触发",
         ],
         "notes": [
             "技能之间不使用跨目录相对引用，可单独导入",
             "scripts/ 需要宿主能执行 Python（仅用标准库）",
             "cognitive-noise 仅在 mode=simulation 下被脚本允许启用",
+            "community-roles/ 下的角色是可选增强，不装也能跑",
         ],
     }
 
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
+        # 入口文件放最前面，解压后第一眼看到
+        z.writestr(f"{bundle_name}/START-HERE.md", START_HERE_TEMPLATE.format(
+            version=version, skill_count=len(skills),
+            community_count=manifest["community_role_count"],
+            built_at=manifest["built_at"]))
         for rel in BUNDLE_FILES:
             p = ROOT / rel
             if p.exists():
@@ -155,6 +291,8 @@ def build(version: str, out_dir: Path, per_skill: bool = False) -> dict:
         for s in skills:
             for rel in s["files"]:
                 z.write(ROOT / rel, f"{bundle_name}/{rel}")
+        for rel in extra:
+            z.write(ROOT / rel, f"{bundle_name}/{rel}")
         z.writestr(f"{bundle_name}/import-manifest.json",
                    json.dumps(manifest, ensure_ascii=False, indent=2))
 
@@ -197,9 +335,14 @@ def verify(zip_path: Path) -> int:
         }
         if not skill_mds or not manifest:
             emit_and_fail(results, "缺少 SKILL.md 或 import-manifest.json")
-        # 逐技能 frontmatter 复查
+        # 逐技能 frontmatter 复查（模板目录 _template 是占位，不参与校验）
         problems = []
+        checked = 0
         for n in skill_mds:
+            parts = n.split("/")
+            if "_template" in parts:
+                continue
+            checked += 1
             try:
                 text = z.read(n).decode("utf-8")
             except UnicodeDecodeError:
@@ -209,8 +352,9 @@ def verify(zip_path: Path) -> int:
                 problems.append(f"{n}: 缺 frontmatter")
                 continue
             fm = yaml.safe_load(text.split("---", 2)[1]) or {}
-            if fm.get("name") != n.split("/")[-2]:
+            if fm.get("name") != parts[-2]:
                 problems.append(f"{n}: name 与目录不一致")
+        results["skills_checked"] = checked
         results["problems"] = problems
         results["ok"] = not problems
         print(json.dumps(results, ensure_ascii=False, indent=2))
@@ -222,6 +366,156 @@ def emit_and_fail(obj, msg):
     obj["error"] = msg
     print(json.dumps(obj, ensure_ascii=False, indent=2))
     raise SystemExit(1)
+
+
+# --------------------------------------------------------------------------- #
+# 市场单技能包（Agensi / Claude Skills 通用格式）
+#
+# 与整包不同：市场的规范是「一个 ZIP = 一个技能」，
+# 顶层文件夹名 = 技能名，SKILL.md 直接在它下面（不能双层嵌套）。
+# 参考 Agensi 的 zip structure 要求：
+#   correct:  skill-name/{SKILL.md, references/, scripts/}
+#   wrong:    SKILL.md（无外层文件夹）
+#   wrong:    skill-name/skill-name/SKILL.md（双层嵌套）
+# --------------------------------------------------------------------------- #
+
+MARKET_README_TEMPLATE = """# {title}
+
+{description}
+
+---
+
+## 装法
+
+把本目录整个放进你 AI 客户端的 skills 目录：
+
+| 客户端 | 目标位置 |
+|---|---|
+| Claude Code | `~/.claude/skills/{name}/` |
+| Cursor / Cline / Windsurf | 项目内 `skills/{name}/` |
+| 马维斯 Marvis | 技能管理 → 导入技能 → 选本目录的 `SKILL.md` |
+| 其他（读 AGENTS.md 的） | 放进 `skills/{name}/` |
+
+装好后对它说：
+
+> {trigger_example}
+
+---
+
+## 里面有什么
+
+```
+{name}/
+├── SKILL.md          ← 技能本体（agent 读这个）
+{extra_tree}```
+
+---
+
+## 说明
+
+{notes}
+
+许可：MIT。
+"""
+
+
+def _skill_tree(d: Path) -> str:
+    """生成技能目录的简短树状说明。"""
+    lines = []
+    for sub in ("references", "scripts"):
+        p = d / sub
+        if p.is_dir():
+            files = sorted(f.name for f in p.glob("*") if f.is_file())
+            if files:
+                lines.append(f"├── {sub}/")
+                for f in files[:6]:
+                    lines.append(f"│   └── {f}")
+                if len(files) > 6:
+                    lines.append(f"│   └── …（共 {len(files)} 个）")
+    return "\n".join(lines) + ("\n" if lines else "")
+
+
+def build_market(version: str, out_dir: Path, only: str = None) -> dict:
+    """为每个技能打一个符合市场规范的单技能 ZIP。"""
+    skills = collect_skills()
+    if only:
+        skills = [s for s in skills if s["skill"] == only]
+        if not skills:
+            die(f"找不到技能：{only}")
+
+    market_dir = out_dir / "market"
+    market_dir.mkdir(parents=True, exist_ok=True)
+
+    made = []
+    for s in skills:
+        name = s["skill"]
+        src = ROOT / "skills" / name
+        zip_path = market_dir / f"{name}-v{version}.zip"
+
+        title = f"{name}"
+        desc = s["description"]
+        trigger = ("用它开始一场终极圆桌讨论"
+                   if name == "ultimate-roundtable" else
+                   "让这个技能参与你的圆桌讨论")
+
+        readme = MARKET_README_TEMPLATE.format(
+            title=title, description=desc, name=name,
+            trigger_example=trigger,
+            extra_tree=_skill_tree(src),
+            notes=("本技能是圆桌讨论体系的一部分，单独使用也可以；"
+                   "配套技能见仓库 README。\n"
+                   "脚本仅用 Python 标准库，不需要安装依赖。"))
+
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
+            # 单层顶层文件夹，SKILL.md 在其根部
+            z.write(src / "SKILL.md", f"{name}/SKILL.md")
+            z.writestr(f"{name}/README.md", readme)
+            for rel in s["files"]:
+                if rel.endswith("SKILL.md"):
+                    continue
+                z.write(ROOT / rel, f"{name}/{Path(rel).relative_to('skills/' + name).as_posix()}")
+
+        made.append({"skill": name, "zip": str(zip_path),
+                     "size_kb": round(zip_path.stat().st_size / 1024, 1),
+                     "sha256": sha256_of(zip_path)})
+
+    return {"market_dir": str(market_dir), "count": len(made), "bundles": made}
+
+
+def verify_market(zip_path: Path) -> dict:
+    """按市场规范校验单技能 ZIP：单层顶层文件夹 + SKILL.md 在根部。"""
+    if not zip_path.exists():
+        die(f"ZIP 不存在: {zip_path}")
+    problems = []
+    with zipfile.ZipFile(zip_path) as z:
+        if z.testzip():
+            die("ZIP 损坏")
+        names = [n for n in z.namelist() if not n.endswith("/")]
+        tops = {n.split("/")[0] for n in names}
+        if len(tops) != 1:
+            problems.append(f"顶层必须只有一个文件夹，实际 {len(tops)} 个：{sorted(tops)}")
+        top = sorted(tops)[0] if tops else ""
+        if f"{top}/SKILL.md" not in names:
+            problems.append(f"SKILL.md 必须在 {top}/ 根部（不能在 zip 根或双层嵌套）")
+        nested = [n for n in names if n.startswith(f"{top}/{top}/")]
+        if nested:
+            problems.append(f"存在双层嵌套：{nested[:3]}")
+        if any("__pycache__" in n or n.endswith(".pyc") for n in names):
+            problems.append("含 __pycache__ 或 .pyc")
+        if any(n.endswith((".DS_Store", "Thumbs.db")) for n in names):
+            problems.append("含系统隐藏文件（.DS_Store / Thumbs.db）")
+        # frontmatter 必须只有 name + description 等合法字段
+        try:
+            text = z.read(f"{top}/SKILL.md").decode("utf-8")
+            fm = yaml.safe_load(text.split("---", 2)[1]) or {}
+            if fm.get("name") != top:
+                problems.append(f"frontmatter name={fm.get('name')!r} 与文件夹名 {top!r} 不一致")
+            if not str(fm.get("description", "")).strip():
+                problems.append("description 为空")
+        except Exception as exc:                     # noqa: BLE001
+            problems.append(f"SKILL.md 解析失败：{exc}")
+    return {"zip": str(zip_path), "top_folder": top, "entries": len(names),
+            "problems": problems, "ok": not problems}
 
 
 def selftest() -> int:
@@ -251,8 +545,13 @@ def selftest() -> int:
         with zipfile.ZipFile(zp) as z:
             names = z.namelist()
             ck(any(n.endswith("import-manifest.json") for n in names), "ZIP 内含 import-manifest.json")
-            ck(len([n for n in names if n.endswith("SKILL.md")]) == len(skills),
-               "ZIP 内 SKILL.md 数量与技能数一致")
+            # 现在包里同时含核心技能与社区角色，SKILL.md 总数 = 两者之和
+            n_skill_md = len([n for n in names if n.endswith("SKILL.md")])
+            ck(n_skill_md >= len(skills), f"ZIP 内 SKILL.md 数量 ≥ 核心技能数（{n_skill_md} ≥ {len(skills)}）")
+            ck(any(n.endswith("START-HERE.md") for n in names), "ZIP 内含开箱入口 START-HERE.md")
+            ck(any("community-roles/" in n for n in names), "ZIP 内含社区角色")
+            ck(any("templates/stage1.json" in n for n in names), "ZIP 内含阶段配置模板")
+            ck(any("/tools/quickstart.py" in n for n in names), "ZIP 内含 quickstart.py")
             ck(any(n.endswith("docs/output-contract.md") for n in names), "ZIP 内含冻结契约")
         ck(len(res["per_skill"]) == len(skills), "逐技能包数量与技能数一致")
         rc = verify(zp)
@@ -271,23 +570,61 @@ def selftest() -> int:
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description="技能包打包器")
+    ap = argparse.ArgumentParser(description="技能包打包器（整包 / 逐技能 / 市场单技能）")
     sub = ap.add_subparsers(dest="cmd", required=True)
     pb = sub.add_parser("build")
-    pb.add_argument("--version", default="1.1.0")
+    pb.add_argument("--version", default="1.7.0")
     pb.add_argument("--out", default="dist")
     pb.add_argument("--per-skill", action="store_true")
+    pb.add_argument("--market", action="store_true",
+                    help="额外产出符合市场规范的单技能 ZIP（Agensi / Claude Skills）")
+    pb.add_argument("--only", help="只打包某一个技能（配合 --market）")
+
     pv = sub.add_parser("verify")
     pv.add_argument("--zip", required=True)
+    pv.add_argument("--market", action="store_true", help="按市场规范校验单技能 ZIP")
+
+    pm = sub.add_parser("market", help="只产出市场单技能 ZIP")
+    pm.add_argument("--version", default="1.7.0")
+    pm.add_argument("--out", default="dist")
+    pm.add_argument("--only")
+
+    pvm = sub.add_parser("verify-market", help="校验 dist/market/ 下全部单技能 ZIP")
+    pvm.add_argument("--dir", default="dist/market")
+
     sub.add_parser("selftest")
     args = ap.parse_args(argv)
 
     if args.cmd == "build":
-        res = build(args.version, (ROOT / args.out).resolve(), args.per_skill)
+        out = (ROOT / args.out).resolve()
+        res = build(args.version, out, args.per_skill)
+        if args.market or args.only:
+            res["market"] = build_market(args.version, out, args.only)
         print(json.dumps(res, ensure_ascii=False, indent=2))
         return 0
     if args.cmd == "verify":
+        if args.market:
+            r = verify_market(Path(args.zip))
+            print(json.dumps(r, ensure_ascii=False, indent=2))
+            return 0 if r["ok"] else 1
         return verify(Path(args.zip))
+    if args.cmd == "market":
+        res = build_market(args.version, (ROOT / args.out).resolve(), args.only)
+        print(json.dumps(res, ensure_ascii=False, indent=2))
+        return 0
+    if args.cmd == "verify-market":
+        d = (ROOT / args.dir).resolve() if not Path(args.dir).is_absolute() else Path(args.dir)
+        if not d.is_dir():
+            die(f"目录不存在：{d}")
+        zips = sorted(d.glob("*.zip"))
+        if not zips:
+            die(f"{d} 下没有 zip")
+        results = [verify_market(p) for p in zips]
+        failed = [r for r in results if not r["ok"]]
+        print(json.dumps({"dir": str(d), "total": len(results),
+                          "failed": len(failed), "results": results},
+                         ensure_ascii=False, indent=2))
+        return 1 if failed else 0
     return selftest()
 
 

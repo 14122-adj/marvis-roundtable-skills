@@ -4,25 +4,38 @@
 
 一句话：**讨论机制从角色提示词里抽出来交给编排层；角色只负责自己的思维协议。**
 
-## 30 秒跑通
+> ### 🚀 第一次来？先看 **[QUICKSTART.md](QUICKSTART.md)** —— 10 分钟跑通
+>
+> ```bash
+> git clone https://github.com/14122-adj/marvis-roundtable-skills.git
+> cd marvis-roundtable-skills
+> python tools/quickstart.py
+> ```
+>
+> 约 10 秒：体检 → 跑完一场完整的终极圆桌 → 自检 → 告诉你下一步。
+> 换成你自己的议题：`python tools/wizard.py`（交互式，替你生成 5 个阶段的配置）。
 
-```bash
-git clone https://github.com/14122-adj/marvis-roundtable-skills.git
-cd marvis-roundtable-skills
-python tools/quickstart.py
-```
+### 想直接下载？
 
-体检 → 跑一场完整终极圆桌 → 自检 → 告诉你下一步。约 10 秒，产物在 `.quickstart/`。
+去 [**Releases**](https://github.com/14122-adj/marvis-roundtable-skills/releases/latest) 下载 `marvis-roundtable-skills-v1.7.0.zip`，
+解压后先读里面的 `START-HERE.md`。
 
-换成你自己的议题：`python tools/wizard.py`（交互式，替你生成 5 个阶段的配置）。
-详细路径见 **[QUICKSTART.md](QUICKSTART.md)**。
+---
+
+| 你想做什么 | 去哪 |
+|---|---|
+| **10 分钟跑通** | **[QUICKSTART.md](QUICKSTART.md)** |
+| 看一场完整讨论长什么样 | [`docs/example-session.md`](docs/example-session.md) |
+| 了解全部字段 | [`docs/output-contract.md`](docs/output-contract.md) |
+| 贡献一个新角色 | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
+| 在 AI 客户端里用 | `python skills/host-bootstrap/scripts/bootstrap.py detect` |
 
 ---
 
 - 版本：**v1.7.0**（P0–P11）；`ultimate-roundtable` **v4.1.0**、`host-bootstrap` **v3.0.0** 按上游 spec 独立发版
 - 形态：**14 个核心技能** ＋ **2 个社区角色**（`community-roles/`）＋ **18 个零依赖 Python 脚本**（全部带 `--selftest`）
 - 跨宿主：马维斯 / **Claude Code** / **Codex (ChatGPT)** / **Hermes** / Cursor / 纯文本对话
-- 验收：`tools/validate_repo.py` 121 项、`tools/run_evals.py` 36 条离线评测、两套端到端 demo
+- 验收：`tools/validate_repo.py` 127 项、`tools/run_evals.py` 38 条离线评测、两套端到端 demo
 - 语言：中文正文，字段名英文
 
 > **欢迎贡献角色**：六个人覆盖不了所有思考方式。
