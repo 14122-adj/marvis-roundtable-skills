@@ -64,6 +64,13 @@
       "expect": { "should_trigger": true }
     },
     {
+      "id": "trigger-host-bootstrap",
+      "type": "trigger",
+      "skill": "host-bootstrap",
+      "prompt": "把这套圆桌技能接入 Claude 和 Codex，先检测一下六个角色技能装没装",
+      "expect": { "should_trigger": true }
+    },
+    {
       "id": "trigger-ultimate-roundtable",
       "type": "trigger",
       "skill": "ultimate-roundtable",
@@ -141,6 +148,20 @@
       "stderr_contains": ["selftest OK"]
     },
     {
+      "id": "cmd-memory-store",
+      "type": "command",
+      "cmd": ["python", "{ROOT}/skills/ultimate-roundtable/scripts/memory_store.py", "selftest"],
+      "expect_exit": 0,
+      "stderr_contains": ["selftest OK"]
+    },
+    {
+      "id": "cmd-host-bootstrap",
+      "type": "command",
+      "cmd": ["python", "{ROOT}/skills/host-bootstrap/scripts/bootstrap.py", "selftest"],
+      "expect_exit": 0,
+      "stderr_contains": ["selftest OK"]
+    },
+    {
       "id": "cmd-clash-analyzer",
       "type": "command",
       "cmd": ["python", "{ROOT}/skills/ultimate-roundtable/scripts/clash_analyzer.py", "selftest"],
@@ -188,6 +209,20 @@
         "MEMORY_UPDATE"
       ],
       "must_not_contain": ["TODO", "FIXME"]
+    },
+    {
+      "id": "artifact-agents-entry",
+      "type": "artifact",
+      "path": "AGENTS.md",
+      "must_contain": ["host-bootstrap", "ultimate-roundtable", "simulated"],
+      "must_not_contain": ["TODO"]
+    },
+    {
+      "id": "artifact-claude-entry",
+      "type": "artifact",
+      "path": "CLAUDE.md",
+      "must_contain": ["host-bootstrap", "ultimate-roundtable", "bootstrap.py detect"],
+      "must_not_contain": ["TODO"]
     },
     {
       "id": "artifact-contract-core-fields",

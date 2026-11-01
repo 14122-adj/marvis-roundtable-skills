@@ -4,9 +4,10 @@
 
 一句话：**讨论机制从角色提示词里抽出来交给编排层；角色只负责自己的思维协议。**
 
-- 版本：**v1.2.0**（P0–P5 + 终极圆桌）；`ultimate-roundtable` 按上游 spec 独立发版 **v2.0.0**
-- 形态：**13 个独立技能**（每个可单独导入）＋ **12 个零依赖 Python 脚本**（全部带 `--selftest`）
-- 验收：`tools/validate_repo.py` 91 项、`tools/run_evals.py` 28 条离线评测、两套端到端 demo
+- 版本：**v1.3.0**（P0–P6）；`ultimate-roundtable` 与 `host-bootstrap` 按上游 spec 独立发版 **v3.0.0**
+- 形态：**14 个独立技能**（每个可单独导入）＋ **14 个零依赖 Python 脚本**（全部带 `--selftest`）
+- 跨宿主：马维斯 / **Claude Code** / **Codex (ChatGPT)** / **Hermes** / Cursor / 纯文本对话
+- 验收：`tools/validate_repo.py` 102 项、`tools/run_evals.py` 33 条离线评测、两套端到端 demo
 - 语言：中文正文，字段名英文
 
 ---
@@ -29,9 +30,10 @@
 
 ---
 
-## 2. 七层架构 + 终极圆桌
+## 2. 架构
 
 ```
+Layer -1 host-bootstrap            宿主检测 + 六个角色技能自动部署（跨 AI 接入前置）
 Layer 0  roundtable-orchestrator   调度、状态、轮次、聚合（不参与讨论）
 Layer 1  role-musk / feynman / munger / jobs / karpathy / pg   角色思维协议 ×6
 Layer 2  meta-supervisor           隐性假设、分歧分类、信息缺口、谬误、质量评分
@@ -40,8 +42,8 @@ Layer 4  decision-landscape        决策景观报告（共识/分歧/假设/建
 Layer 5  cognitive-noise           轻量认知噪声（可选，仅 simulation 模式）
 Layer 6  multi-model-adapter       异构基座调用包与结果合并（可选）
 
-Layer 0+ ultimate-roundtable       高强度审议：摊牌 → 红蓝对抗 → 沙盘 → 降维打击
-                                   （独立状态文件，输出 Do/Don't/Need Info + 存活率）
+Layer 0+ ultimate-roundtable V3    高强度审议：记忆唤醒 → 摊牌(工具闭环) → 红蓝对抗(验真)
+                                   → 沙盘(工具验证) → 降维打击 → 五节报告 + 存活率
 ```
 
 数据流：
@@ -54,16 +56,22 @@ R0 列共享前提 → R1 六角色隔离立论 → R1.5 元认知扫描并注�
           Layer 5 噪声（仅 simulation）    Layer 6 多基座分发（可选）
 
 需要把讨论压成决策时，另起一条流水线：
-   终极圆桌 stage1（数据诉求+真实/模拟标注）→ stage2（内心戏+打断+3v3 红蓝+火花检测）
-   → stage3（沙盘推演+动态召唤+存活率）→ stage4（共同隐性假设+≤200字记忆）→ 五节报告
+   终极圆桌 V3
+     stage0 记忆唤醒（读历史 [MEMORY_UPDATE]）
+     stage1 数据诉求 + [Tool Call] 闭环 + 真实/模拟标注
+     stage2 内心戏 + 打断 + 3v3 红蓝 + [打断并验真]
+     stage3 沙盘推演 + 工具验证假设 + 动态召唤
+     stage4 共同隐性假设 + ≤200 字记忆 → 写入记忆库
+     report 五节报告（外部数据 / 隐性假设 / 行动指令 / 存活率 / 记忆）
 ```
 
 ### 两套流程怎么选
 
-| | `roundtable-orchestrator` | `ultimate-roundtable` |
+| | `roundtable-orchestrator` | `ultimate-roundtable` V3 |
 |---|---|---|
-| 目标 | 把讨论做深、挖到共享前提 | 把讨论压成**能执行的决策** |
+| 目标 | 把讨论做深、挖到共享前提 | 把讨论压成**经过外部验证**的决策 |
 | 输出 | 决策景观（分区呈现） | 存活率 + Do / Don't / Need Info |
+| 记忆 | 无 | 跨会话读写 |
 | 何时用 | 议题还不清楚、需要先想明白 | 方案已成型、需要压力测试并拍板 |
 
 ### 角色思维协议一览
@@ -87,25 +95,28 @@ R0 列共享前提 → R1 六角色隔离立论 → R1.5 元认知扫描并注�
 ```
 marvis-roundtable-skills/
 ├── README.md  LICENSE  CHANGELOG.md  .gitignore  .gitattributes
+├── AGENTS.md                     ← Codex / Hermes / Cursor 等宿主的仓库级入口
+├── CLAUDE.md                     ← Claude Code 的仓库级入口
 ├── docs/
-│   ├── output-contract.md        ← 冻结契约 v1.2.0：所有字段的唯一来源（含 §8 §9 §10 §11）
+│   ├── output-contract.md        ← 冻结契约 v1.3.0（含 §8 §9 §10 §11 §12）
 │   └── example-session.md        ← 一次完整讨论的实录（示例数据，含脚本误报说明）
 ├── evals/
-│   └── evals.json                ← 28 条离线评测（trigger / command / artifact）
+│   └── evals.json                ← 33 条离线评测（trigger / command / artifact）
 ├── tools/
-│   ├── validate_repo.py          ← 91 项仓库自检（结构/契约/版本/禁用写法/脚本自检）
+│   ├── validate_repo.py          ← 102 项仓库自检（结构/契约/版本/禁用写法/14 个脚本自检）
 │   ├── run_evals.py              ← 离线评测 runner（不调用模型，--live 会明确说明）
 │   ├── package_bundle.py         ← 打包 ZIP（整包 + 逐技能），打包前校验
-│   ├── demo_session.py           ← 8 步端到端演示（圆桌主线）
-│   └── demo_ultimate.py          ← 终极圆桌四阶段演示（含真实测量 + 模拟数据标注）
+│   ├── demo_session.py           ← 圆桌主线端到端演示
+│   └── demo_ultimate.py          ← 终极圆桌 V3 端到端（记忆 + 工具闭环 + 验真 + 沙盘）
 └── skills/
+    ├── host-bootstrap/           scripts/bootstrap.py（宿主检测 + 角色技能自动部署）
     ├── roundtable-orchestrator/  scripts/{state_manager,round_controller,convergence_detector}.py
     ├── meta-supervisor/          scripts/{assumption_extractor,divergence_classifier,fallacy_detector}.py
     ├── position-evolution/       scripts/revision_tracker.py
     ├── decision-landscape/       scripts/synthesis_generator.py
     ├── cognitive-noise/          scripts/noise_injector.py
     ├── multi-model-adapter/      scripts/runtime_manifest.py
-    ├── ultimate-roundtable/      scripts/{ultimate_orchestrator,clash_analyzer}.py
+    ├── ultimate-roundtable/      scripts/{ultimate_orchestrator,clash_analyzer,memory_store}.py
     └── role-{musk,feynman,munger,jobs,karpathy,pg}/
 ```
 
@@ -118,11 +129,14 @@ marvis-roundtable-skills/
 ```bash
 cd marvis-roundtable-skills
 
-# 一键验收（91 项 + 12 个脚本自检）
+# 一键验收（102 项 + 14 个脚本自检）
 python tools/validate_repo.py
 
-# 离线评测（28 条，不调用模型）
+# 离线评测（33 条，不调用模型）
 python tools/run_evals.py
+
+# 宿主检测：我在什么环境？六个角色技能齐了吗？
+python skills/host-bootstrap/scripts/bootstrap.py detect
 
 # 8 步端到端演示：R0→R1→元认知→R2（含一次有效修正 + 一次从众漂移）→收敛→交接→决策景观→噪声拒绝→多基座调用包
 python tools/demo_session.py --quiet --out .roundtable-demo
@@ -171,12 +185,18 @@ python skills/multi-model-adapter/scripts/runtime_manifest.py merge --state S --
 UR=skills/ultimate-roundtable/scripts
 
 python $UR/ultimate_orchestrator.py init   --topic "议题" --out .ultimate/run1
-python $UR/ultimate_orchestrator.py stage1 --state S --file roles.json   --write   # 数据诉求 + 真实/模拟标注
-python $UR/ultimate_orchestrator.py stage2 --state S --file clash.json   --write   # 内心戏 + 打断 + 3v3
-python $UR/ultimate_orchestrator.py stage3 --state S --file sandbox.json --write   # 沙盘 + 召唤 + 存活率
-python $UR/ultimate_orchestrator.py stage4 --state S --file meta.json    --write   # 隐性假设 + ≤200字记忆
+python $UR/ultimate_orchestrator.py stage0 --state S --file mem.json     --write   # 记忆唤醒
+python $UR/ultimate_orchestrator.py stage1 --state S --file roles.json   --write   # 数据诉求 + Tool Call 闭环
+python $UR/ultimate_orchestrator.py stage2 --state S --file clash.json   --write   # 内心戏 + 打断 + 3v3 + 验真
+python $UR/ultimate_orchestrator.py stage3 --state S --file sandbox.json --write   # 沙盘 + 工具验证 + 召唤
+python $UR/ultimate_orchestrator.py stage4 --state S --file meta.json    --write   # 隐性假设 + 记忆写入
 python $UR/ultimate_orchestrator.py check  --state S
-python $UR/ultimate_orchestrator.py report --state S --out REPORT.md               # 冻结五节报告
+python $UR/ultimate_orchestrator.py report --state S --out REPORT.md               # V3 五节报告
+
+# 记忆库单独操作
+python $UR/memory_store.py stats                       # 看记忆库现状
+python $UR/memory_store.py recall --query 评审          # 检索相关历史
+python $UR/memory_store.py intro                       # 生成阶段零开场白
 
 # 单独使用量化器官
 python $UR/clash_analyzer.py spark    --state S --round 2    # 无火花 → 退出码 4，强制重开
@@ -192,11 +212,14 @@ python $UR/clash_analyzer.py survival --state S              # 存活率四项�
 - 自然语言："开启圆桌讨论：要不要把年度评审改成季度"、"这场讨论的底层前提是什么"、
   "把这些讨论汇总成一份决策报告"、"担心多角色共享同一个模型导致盲区一致"
 - 终极圆桌："**开启终极圆桌**"、"深度推演讨论"、"红蓝对抗圆桌"
-- 显式调用：`@roundtable-orchestrator`、`@decision-landscape`、`@ultimate-roundtable` 等
+- 跨宿主接入："**接入 Claude**"、"接入 Codex"、"技能缺失"、"部署圆桌技能"
+- 显式调用：`@roundtable-orchestrator`、`@ultimate-roundtable`、`@host-bootstrap` 等
 
 ---
 
-## 5. 部署到马维斯
+## 5. 部署
+
+### 5.1 马维斯 Marvis
 
 两种方式，二选一：
 
@@ -204,20 +227,59 @@ python $UR/clash_analyzer.py survival --state S              # 存活率四项�
 
 ```
 马维斯 → 技能管理 → 本地技能 → 导入技能 → 选择 SKILL.md
-导入顺序：roundtable-orchestrator → meta-supervisor → position-evolution → decision-landscape
-        → 6 个 role-* → cognitive-noise → multi-model-adapter → ultimate-roundtable
+导入顺序：host-bootstrap → roundtable-orchestrator → meta-supervisor → position-evolution
+        → decision-landscape → 6 个 role-* → cognitive-noise → multi-model-adapter
+        → ultimate-roundtable
 ```
 
 **方式 B · ZIP 上传**
 
 ```bash
-python tools/package_bundle.py build --version 1.2.0 --per-skill
+python tools/package_bundle.py build --version 1.3.0 --per-skill
 # 产物：
-#   dist/marvis-roundtable-skills-v1.2.0.zip                  整包（含契约与 import-manifest.json）
-#   dist/marvis-roundtable-skills-v1.2.0.import-manifest.json 导入清单（文件数/行数/描述/哈希）
-#   dist/skills/<skill>-v1.2.0.zip                            逐技能包
-python tools/package_bundle.py verify --zip dist/marvis-roundtable-skills-v1.2.0.zip
+#   dist/marvis-roundtable-skills-v1.3.0.zip                  整包（含契约、AGENTS/CLAUDE 与 import-manifest.json）
+#   dist/marvis-roundtable-skills-v1.3.0.import-manifest.json 导入清单（文件数/行数/描述/哈希）
+#   dist/skills/<skill>-v1.3.0.zip                            逐技能包
+python tools/package_bundle.py verify --zip dist/marvis-roundtable-skills-v1.3.0.zip
 ```
+
+### 5.2 其他 AI 宿主（Claude / Codex / Hermes / Cursor）
+
+**先检测，再部署**——六个角色技能在你那边可能根本不存在：
+
+```bash
+B=skills/host-bootstrap/scripts/bootstrap.py
+
+python $B detect                                  # 我是什么宿主？六个角色技能齐吗？
+python $B install --target ~/.claude/skills       # Claude Code
+python $B install --target ~/.codex/skills        # Codex (ChatGPT)
+python $B install --target ~/.hermes/skills       # Hermes
+python $B verify  --target ~/.claude/skills       # 逐字段校验
+```
+
+`install` 有四级回退：**本地复制 → git clone → HTTP 逐文件下载 → 打印手工步骤**。
+无网络无 git 时会打印 curl 与 ZIP 两种手工方案并返回退出码 1，**不会假装成功**。
+
+仓库根已提供宿主入口文件：
+
+| 文件 | 面向 |
+|---|---|
+| `AGENTS.md` | Codex / Hermes / Cursor / Cline / Windsurf |
+| `CLAUDE.md` | Claude Code / Claude |
+
+**六个角色技能仓库地址**：
+
+| 技能 | 地址 |
+|---|---|
+| `role-musk` | https://github.com/14122-adj/marvis-roundtable-skills/tree/main/skills/role-musk |
+| `role-feynman` | https://github.com/14122-adj/marvis-roundtable-skills/tree/main/skills/role-feynman |
+| `role-munger` | https://github.com/14122-adj/marvis-roundtable-skills/tree/main/skills/role-munger |
+| `role-jobs` | https://github.com/14122-adj/marvis-roundtable-skills/tree/main/skills/role-jobs |
+| `role-karpathy` | https://github.com/14122-adj/marvis-roundtable-skills/tree/main/skills/role-karpathy |
+| `role-pg` | https://github.com/14122-adj/marvis-roundtable-skills/tree/main/skills/role-pg |
+
+**降级契约**：角色技能确实缺失时，必须在输出里写
+`⚠ 降级模式：role-* 技能未安装，角色协议为摘要级`，不允许假装完整协议已生效。
 
 然后在马维斯里 `设置 → Skills → Create → Upload` 选择 ZIP。
 
@@ -230,16 +292,19 @@ python tools/package_bundle.py verify --zip dist/marvis-roundtable-skills-v1.2.0
 
 | 项目 | 结果 |
 |---|---|
-| `tools/validate_repo.py` | **91/91** 通过（结构 / frontmatter / 契约字段 / 章节 / 版本一致 / 禁用写法 / **12 个脚本自检**） |
-| `tools/run_evals.py` | **28/28** 通过（含 13 条技能可触发性、2 条负例、8 条命令、4 条产物检查） |
+| `tools/validate_repo.py` | **102/102** 通过（结构 / frontmatter / 契约字段 / 章节 / 版本一致 / 禁用写法 / **14 个脚本自检**） |
+| `tools/run_evals.py` | **33/33** 通过（含 14 条技能可触发性、2 条负例、10 条命令、5 条产物检查） |
 | `tools/demo_session.py` | 圆桌主线 8 步通过：抓出 H1「竞赛必须拿奖才算成功」、4 角色回应、1 次有效修正 + 1 次从众漂移被拦、决策景观报告生成 |
-| `tools/demo_ultimate.py` | 终极圆桌四阶段通过：6 条数据诉求（**2 条真实本地测量** + 4 条标注模拟）、3v3 对抗 sparked、空洞发言被判 no_spark 退出码 4、沙盘存活率 52%、五节报告 |
-| `tools/package_bundle.py` | 13 个技能打包成功，`verify` 通过 |
+| `tools/demo_ultimate.py` | 终极圆桌 V3 全流程通过：阶段零记忆唤醒 → 6 条数据诉求（**2 条真实本地测量** + 4 条标注模拟）+ Tool Call 闭环 → 3v3 对抗 sparked + 1 次交叉验真 → 沙盘 Code 验证 → 记忆写入 → V3 五节报告 |
+| `tools/demo_ultimate.py` 反例 | 空洞发言被判 `no_spark`（退出码 4）；缺 `[Tool Call]` 闭环被判阶段一失败（退出码 3） |
+| `tools/package_bundle.py` | 14 个技能打包成功，`verify` 通过 |
+| `bootstrap.py detect` | 在本机正确识别出 Claude / Codex / Marvis / DSH 四处技能目录，仓库内角色技能 6/6 就绪 |
 
-### 终极圆桌的量化产物（本仓库实测值，非示例）
+### 终极圆桌 V3 的量化产物（本仓库实测值，非示例）
 
-`demo_ultimate.py` 的真实测量部分：本仓库 `.md`/`.py` 共 **48 个文件、13102 行**
-（以 `source: tool` 记入阶段一，可被任何人重跑复现）。
+`demo_ultimate.py` 的真实测量部分：本仓库 `.md`/`.py` 文件数与总行数
+（以 `source: tool` 记入阶段一，可被任何人重跑复现）；
+沙盘里的 `Code` 调用也是**真实可运行的 Python 代码**（验证切换成本累积是否反转结论）。
 
 沙盘存活率 **52%**（medium 分档）的构成，可手算复现：
 
@@ -281,6 +346,13 @@ survival = 0.40×61.3 + 0.25×25.0 + 0.20×33.3 + 0.15×100.0
    演示中只有 2 条是真实本地测量，其余 4 条明确标注为模拟——**报告头部会直接印出这个比例**。
 8. **火花检测与存活率都是规则/算术，不是判断。** "打出火花"只说明结构上有交锋，
    不说明交锋质量；"存活率 52%"是可以被逐项挑战重算的算术结果，不是"这个方案该不该做"的结论。
+9. **跨宿主适配只做文件层面。** `bootstrap.py` 会复制/下载技能文件并校验，但
+   **不修改宿主配置、不重启宿主**；找不到马维斯技能目录时如实报"未检测到"，不猜路径。
+10. **记忆库是本地 JSONL。** 不加密、不同步、不做语义检索（只有字面匹配）；
+    跨机器使用需要自己同步 `.roundtable-memory/memories.jsonl`。
+11. **V3 的工具闭环只校验"有没有写"，不校验"结果真不真"。** 脚本能强制你写
+    `[Tool Call]` 和表态句，但无法判断工具结果是否真实——这部分靠 `source`/`simulated`
+    标注 + 报告头部的条数统计来约束，最终仍需人复核。
 
 ---
 
@@ -295,8 +367,11 @@ survival = 0.40×61.3 + 0.25×25.0 + 0.20×33.3 + 0.15×100.0
 | P4 | 异构基座适配（调用包 + 合并校验） | ✅ v1.1.0（真实多 provider 调用待宿主支持） |
 | P5 | 离线评测集与一键打包 | ✅ v1.1.0 |
 | **P6** | **`ultimate-roundtable` 终极圆桌**（红蓝对抗 / 内心戏 / 沙盘 / 存活率 / Do-Don't-NeedInfo） | ✅ **v1.2.0（技能本体 v2.0.0）** |
-| P7 | 完整认知噪声模块（记忆衰减、情绪状态） | ⏳ 暂不做（性价比低，会显著降低严谨性） |
-| P8 | 真实多 provider 联调 | ⏳ 待宿主具备多模型能力 |
+| **P7** | **终极圆桌 V3**（跨会话记忆 + 工具调用闭环 + 交叉验真 + 沙盘工具验证） | ✅ **v1.3.0（技能本体 v3.0.0）** |
+| **P8** | **跨 AI 宿主适配**（`host-bootstrap`：检测 / 自动部署 / 校验 + AGENTS.md / CLAUDE.md） | ✅ **v1.3.0（技能本体 v3.0.0）** |
+| P9 | 完整认知噪声模块（记忆衰减、情绪状态） | ⏳ 暂不做（性价比低，会显著降低严谨性） |
+| P10 | 真实多 provider 联调 | ⏳ 待宿主具备多模型能力 |
+| P11 | 记忆库云端同步 / 语义检索 | ⏳ 当前为本地 JSONL + 字面匹配 |
 
 ---
 

@@ -2,6 +2,39 @@
 
 遵循语义化版本。字段与枚举的改动一律同步 `docs/output-contract.md` 并提升契约版本号。
 
+## v1.3.0 — 2026-11-01
+
+`ultimate-roundtable` 升到 **V3.0**，新增 **`host-bootstrap` v3.0.0**（跨 AI 宿主适配）；
+契约升到 v1.3.0（§11 重写 + 新增 §12），其余 12 个技能版本号对齐 1.3.0。
+
+**`ultimate-roundtable` V3.0**
+- **阶段零 · 记忆唤醒**：新增 `memory_store.py`（JSONL 跨会话记忆库，≤200 字硬门槛、字面检索、
+  可手工修复）；`stage0` 输出固定开场白 `[会议启动] 已加载历史记忆：…`
+- **工具调用闭环**：每条发言必须同时具备 `[数据诉求]` + `[Tool Call: Search|Code]` +
+  `基于此数据，我的观点是…` 三要素，缺一即整体拒绝（退出码 3）
+- **交叉验真**：`[打断并验真]` 必须给出 `[Tool Call]` 或 `verify_result`，
+  `verdict ∈ {supported, refuted, inconclusive}`；只打断不查证直接拒绝
+- **沙盘工具验证**：`sandbox.tool_calls` ≥1 条，`Code` 类型必须有可运行 `code`
+- **记忆沉淀**：阶段四默认 `persist_memory: true`，真正写入记忆库并回报记忆 id
+- **报告升级为 V3 五节**：第 1 节改为「本次会议引入的外部数据 / 工具结果」，
+  共识与分歧移入「过程留痕」；头部打印阶段一/沙盘的真实与模拟条数
+
+**`host-bootstrap` v3.0.0（跨 AI 接入）**
+- `bootstrap.py detect`：识别 Claude / Codex / Hermes / 马维斯 / DSH / 通用环境，
+  探测技能目录，检查六个角色技能是否就绪
+- `bootstrap.py install`：四级回退（本地复制 → git clone → HTTP 逐文件下载 → 打印手工步骤），
+  幂等、支持 `--dry-run`、含 references 不只 SKILL.md
+- `bootstrap.py verify`：逐字段校验 `installed / frontmatter_ok / name_ok / missing_files`
+- 新增仓库级入口文件 `AGENTS.md`（Codex/Hermes/Cursor 等）与 `CLAUDE.md`（Claude Code）
+- 降级契约：角色技能缺失时必须声明「⚠ 降级模式」，不得假装完整协议生效
+
+**工程**
+- `validate_repo.py` 扩到 **102 项**（14 个技能、14 个脚本自检、新增两个入口文件检查）
+- `evals/evals.json` 扩到 **33 条**（新增 host-bootstrap 可触发性、两个脚本命令、两个入口产物检查）
+- `package_bundle.py`：导入顺序把 `host-bootstrap` 提到最前，打包纳入 `AGENTS.md` / `CLAUDE.md`
+- `tools/demo_ultimate.py` 升级为 V3 全流程：阶段零记忆唤醒 → 工具闭环 → 交叉验真 →
+  沙盘 Code 验证 → 记忆写入，并新增两条反例验证（空洞发言退出码 4、无 Tool Call 退出码 3）
+
 ## v1.2.0 — 2026-11-01
 
 新增 `ultimate-roundtable` v2.0.0（上游 spec 独立发版），契约升到 v1.2.0（新增 §11），

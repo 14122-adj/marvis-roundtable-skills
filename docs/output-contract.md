@@ -1,13 +1,16 @@
-# 圆桌技能输出契约 v1.2.0（冻结版）
+# 圆桌技能输出契约 v1.3.0（冻结版）
 
-> 本文件是 13 个技能的**唯一契约来源**。任何 SKILL.md 中的字段名、枚举值、ID 规则都必须与本文件一致。
+> 本文件是 14 个技能的**唯一契约来源**。任何 SKILL.md 中的字段名、枚举值、ID 规则都必须与本文件一致。
 > 修改本文件 = 修改契约 = 必须同步全部角色技能。改动请在 CHANGELOG 中记录版本号。
 >
 > v1.1 变更：新增 §8 决策景观契约（Layer 4）、§9 认知噪声附加契约（Layer 5，可选）、
 > §10 异构基座调用包契约（Layer 6，可选）；§1 的 `meta_engagement` 与 `attention_manifests` 转正。
 >
-> v1.2 变更：新增 §11 终极圆桌契约（`ultimate-roundtable` v2.0.0，四阶段 + 火花判据 + 存活率模型）。
-> 该技能按上游 spec 独立发版（v2.0.0），不参与本仓库其余技能的版本对齐。
+> v1.2 变更：新增 §11 终极圆桌契约（`ultimate-roundtable`，四阶段 + 火花判据 + 存活率模型）。
+>
+> v1.3 变更：§11 升级到 **V3.0**（阶段零记忆唤醒、工具调用闭环、交叉验真、沙盘工具验证、
+> 记忆沉淀），新增 §12 跨宿主适配契约（`host-bootstrap`）。
+> 这两个技能按上游 spec 独立发版（均 v3.0.0），不参与本仓库其余技能的版本对齐。
 
 ---
 
@@ -485,18 +488,33 @@ F. 注入指令（下一轮强制输入）
 它与 §1–§10 的圆桌状态文件**并存但独立**（有自己的 `state.json` 结构），
 两者通过 `roundtable-orchestrator` 的交接块衔接。
 
-### 11.1 四阶段与退出码
+### 11.1 阶段与退出码
 
 | 阶段 | 命令 | 必须产出 | 失败退出码 |
 |---|---|---|---|
 | init | `init --topic` | `state.json` | 2 |
-| 一 | `stage1 --file roles.json` | 6 条 `[数据诉求]` + 每条 `tool_result` | 3 |
-| 二 | `stage2 --file clash.json` | 3v3 分营 + 内心戏 + 火花检测通过 | 3（校验）/ **4（无火花，强制重开）** |
-| 三 | `stage3 --file sandbox.json` | ≥3 月度节点 + risks/assumptions/attacks + action_plan | 3 |
-| 四 | `stage4 --file meta.json` | 共同隐性假设 + 被证伪前提 + ≤200 字记忆 | 3 |
-| 报告 | `report --state --out` | 冻结五节报告 | 3 |
+| 零 | `stage0` | 加载历史记忆 + 输出开场白 | 3 |
+| 一 | `stage1 --file roles.json` | 6 条 `[数据诉求]` + `[Tool Call]` + 表态句 + `tool_result` | 3 |
+| 二 | `stage2 --file clash.json` | 3v3 分营 + 内心戏 + `[打断并验真]`结果 + 火花检测通过 | 3（校验）/ **4（无火花，强制重开）** |
+| 三 | `stage3 --file sandbox.json` | ≥3 月度节点 + risks/assumptions/attacks + action_plan + **≥1 条 `tool_calls`** | 3 |
+| 四 | `stage4 --file meta.json` | 共同隐性假设 + 被证伪前提 + ≤200 字记忆 + **写入记忆库** | 3 |
+| 报告 | `report --state --out` | 冻结五节报告（V3 格式） | 3 |
 
 阶段之间有硬顺序：跳过前一阶段一律退出码 3。
+
+### 11.1b V3 新增的三条硬约束
+
+1. **阶段零记忆唤醒**：`stage0` 读取历史 `[MEMORY_UPDATE]`，输出固定格式开场白
+   `[会议启动] 已加载历史记忆：…`；无历史时写明"无记忆记录"。重复执行只更新、不重复登记。
+2. **工具调用闭环**（阶段一）：每条发言必须同时具备三要素，缺一即整体拒绝：
+   - `[数据诉求: …]`
+   - `[Tool Call: Search|Code] …`
+   - `基于(此|该|这)(数据|结果|查证)` 表态句
+3. **交叉验真**（阶段二）：`[打断并验真]` 必须给出 `[Tool Call]` 或 `verify_result`，
+   否则阶段二拒绝。`verdict ∈ {supported, refuted, inconclusive}`。
+
+沙盘（阶段三）另需 ≥1 条 `tool_calls`，每条含 `kind`（Search/Code）、`purpose`、`result`，
+`Code` 类型还必须有 `code` 字段，且遵守真实/模拟标注。
 
 ### 11.2 数据诚实性（强制）
 
@@ -511,7 +529,7 @@ F. 注入指令（下一轮强制输入）
 |---|---|
 | `source: tool` 且 `simulated: true` | 标注矛盾 → 拒绝 |
 | 既非 `tool` 也未标 `simulated: true` | **把模拟数据伪装成真实数据** → 拒绝 |
-| 报告头部 | 必须打印「真实工具调用 N 条 / 模拟数据 M 条」 |
+| 报告头部 | 必须打印「阶段一 真实 N / 模拟 M；沙盘 真实 X / 模拟 Y」 |
 
 ### 11.3 火花判据（禁止和稀泥的可执行版本）
 
@@ -556,29 +574,99 @@ survival = 0.40 × risk_residual      # 100 × (1 − 平均(severity × probabi
 文本中出现禁止措辞 `已达成共识` / `已验证` / `已挖到根本` / `结论已确定` /
 `我觉得挺好的` / `各有优劣` / `见仁见智` / `综合考虑吧`。
 
-### 11.6 状态字段
+### 11.6 状态字段（V3.0）
 
 ```jsonc
 {
-  "schema_version": "2.0.0", "session_id": "ur-20261101-012900",
-  "topic": "…", "stage": "stage4_done", "stages_done": ["stage1","stage2","stage3","stage4"],
+  "schema_version": "3.0.0", "session_id": "ur-20261101-012900",
+  "topic": "…", "stage": "stage4_done",
+  "stages_done": ["stage0","stage1","stage2","stage3","stage4"],
   "roles": ["musk","feynman","munger","jobs","karpathy","pg"],
+  "stage0": {"memory_loaded": [{"id":"M…","text":"…"}], "opening_line":"[会议启动] …",
+             "store":"…", "memory_count":1, "loaded_at":"…"},
   "stage1": {"confessions": [], "data_demands": [{"role":"musk","demand":"…"}],
-             "tool_results": [{"role":"musk","source":"tool","simulated":false,"result":"…"}]},
+             "tool_results": [{"role":"musk","source":"tool","simulated":false,
+                               "tool_calls":[{"kind":"Search","detail":"…"}],
+                               "closure_ok":true,"result":"…"}]},
   "stage2": {"exchanges": [{"from":"munger","camp":"blue","inner_thought":"…",
-                            "interrupt":true,"target_claim":"M1-1","text":"…"}],
-             "camps": {"blue":["…"],"red":["…"]}, "spark": {}},
+                            "interrupt":true,"verify":true,"target_claim":"M1-1","text":"…"}],
+             "camps": {"blue":["…"],"red":["…"]}, "spark": {},
+             "verifications": [{"from":"pg","target_claim":"K1-1","result":"…",
+                                "simulated":true,"verdict":"refuted"}]},
   "stage3": {"sandbox": {"plan":"…","runners":["karpathy","musk"],"timeline":[],
                          "risks":[],"key_assumptions":[],"attacks":[],
                          "action_plan":{"do":[],"dont":[],"need_info":[]},
+                         "tool_calls":[{"kind":"Code","purpose":"…","code":"…","result":"…"}],
                          "evaluation":{"survival_rate":52,"band":"medium"}},
              "summons": [{"role":"法务专家","reason":"…","statement":"…"}]},
   "stage4": {"meta": {"shared_hidden_assumption":"…","assumption_broken":["…"],
                       "ignored_dimension":"…","consensus":"…","core_divergence":"…"},
-             "memory": "≤200 字"},
+             "memory": "≤200 字", "memory_written": true,
+             "memory_entry": {"id":"M20261101121632","chars":75}},
   "camps": {}, "clash_exchanges": [], "sandbox": {}, "clash_spark": {}
 }
 ```
 
 `stage2` 与顶层的 `camps` / `clash_exchanges` 保持同步，因为 `clash_analyzer.py`
 读的是顶层字段（便于单独调用）；`stage3.sandbox` 与顶层 `sandbox` 同理。
+
+---
+
+## 12. 跨宿主适配契约（`host-bootstrap` v3.0.0）
+
+这套技能原本为马维斯编写。换到 Claude Code / Codex / Hermes / Cursor / 纯文本宿主时，
+**六个角色技能不一定存在**。`host-bootstrap` 负责检测与补齐，并规定降级行为。
+
+### 12.1 三个命令与退出码
+
+| 命令 | 作用 | 退出码 |
+|---|---|---|
+| `bootstrap.py detect` | 判断宿主、技能目录、六个角色技能是否就绪 | 0 就绪 / 1 需安装 |
+| `bootstrap.py install` | 本地复制 → git clone → HTTP 下载 → 打印手工步骤（四级回退） | 0 成功 / 1 需人工 |
+| `bootstrap.py verify` | 逐字段校验（installed / frontmatter_ok / name_ok / missing_files） | 0 全就绪 / 1 有缺失 |
+
+`install` 支持 `--dry-run`（只预演不写盘）与 `--source auto|local|github`。
+**幂等**：已就绪的技能不会被重复覆盖。
+
+### 12.2 角色技能就绪的判定
+
+一个角色技能只有四项全过才算 `ready`：
+
+```jsonc
+{"installed": true,                 // SKILL.md 存在
+ "frontmatter_ok": true,            // frontmatter 含 description:
+ "name_ok": true,                   // name: 与目录名一致
+ "missing_files": []}               // references/ 下的手册齐全
+```
+
+任一不过即进入 `missing`，`install` 会重新补齐（含 references，不只 SKILL.md）。
+
+### 12.3 降级契约（必须声明）
+
+角色技能缺失时**不得假装完整协议已生效**。降级时必须在输出中写明：
+
+```
+⚠ 降级模式：role-* 技能未安装，角色协议为摘要级
+```
+
+工具能力缺失时（纯文本宿主）：
+
+- `[Tool Call]` 照写，但所有结果标 `simulated: true`；
+- 报告头部如实显示「真实 0 条 / 模拟 N 条」；
+- 依赖模拟数据的结论必须进入 `Need Info`。
+
+### 12.4 宿主的接入文件
+
+| 文件 | 面向宿主 | 约定 |
+|---|---|---|
+| `AGENTS.md` | Codex / Hermes / Cursor / Cline / Windsurf | 通用入口：入口表、纪律、目录导航、常用命令 |
+| `CLAUDE.md` | Claude Code / Claude | 与 AGENTS 等价，强调"先读契约再动手" |
+| `skills/*/SKILL.md` | 所有支持 Agent Skills 的宿主 | 单个技能的自描述，不含宿主特定路径 |
+
+**技能之间不使用跨目录相对引用**，因此可以单独复制到任意宿主的技能目录。
+
+### 12.5 诚实边界
+
+- `install` **不修改**宿主配置文件，**不重启**宿主；
+- 找不到马维斯的技能目录时**不猜测**，如实报告"未检测到"；
+- 无网络且无 git 时打印 curl/ZIP 手工步骤并返回非零，不假装成功。

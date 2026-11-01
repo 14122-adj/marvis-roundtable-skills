@@ -44,18 +44,25 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 from clash_analyzer import spark, survival_score  # noqa: E402
+from memory_store import intro as memory_intro, recall as memory_recall  # noqa: E402
+from memory_store import remember as memory_remember  # noqa: E402
+from memory_store import resolve_store as memory_store_path  # noqa: E402
 
-SCHEMA_VERSION = "2.0.0"
+SCHEMA_VERSION = "3.0.0"
 SIX_ROLES = ["musk", "feynman", "munger", "jobs", "karpathy", "pg"]
 ROLE_CN = {"musk": "马斯克", "feynman": "费曼", "munger": "芒格",
            "jobs": "乔布斯", "karpathy": "Karpathy", "pg": "Paul Graham"}
-STAGES = ["stage1", "stage2", "stage3", "stage4"]
+STAGES = ["stage0", "stage1", "stage2", "stage3", "stage4"]
 
 DATA_DEMAND_RE = re.compile(r"\[数据诉求[:：]\s*(.+?)\]")
 INNER_THOUGHT_RE = re.compile(r"\(Inner Thought[:：]\s*(.+?)\)", re.S)
 INTERRUPT_RE = re.compile(r"\[打断\]")
+VERIFY_INTERRUPT_RE = re.compile(r"\[打断并验真\]")
+TOOL_CALL_RE = re.compile(r"\[Tool Call[:：]\s*(Search|Code)\]\s*(.+?)(?:\n|$)", re.I)
+STANCE_AFTER_RE = re.compile(r"基于(?:此|该|这)(?:数据|结果|查证)")
 SUMMON_RE = re.compile(r"\[召唤[:：]\s*(.+?)\]")
 MEMORY_LIMIT = 200
+TOOL_KINDS = ["Search", "Code"]
 
 # 报告里禁止出现的断言（拒绝"和稀泥"式措辞 + 防伪造完成状态）
 FORBIDDEN_PHRASES = [
@@ -116,10 +123,11 @@ def new_state(topic: str, mode: str = "rigorous") -> dict:
         "stages_done": [],
         "roles": list(SIX_ROLES),
         "role_cn": ROLE_CN,
+        "stage0": {"memory_loaded": [], "opening_line": "", "store": ""},
         "stage1": {"confessions": [], "data_demands": [], "tool_results": []},
         "stage2": {"exchanges": [], "camps": {}, "spark": None},
         "stage3": {"sandbox": {}, "summons": []},
-        "stage4": {"meta": {}, "memory": ""},
+        "stage4": {"meta": {}, "memory": "", "memory_written": False},
         "camps": {},
         "clash_exchanges": [],
         "sandbox": {},
@@ -128,8 +136,56 @@ def new_state(topic: str, mode: str = "rigorous") -> dict:
 
 
 # --------------------------------------------------------------------------- #
+# 阶段零：记忆唤醒（V3 新增）
+# --------------------------------------------------------------------------- #
+
+
+def run_stage0(state: dict, payload: dict) -> dict:
+    """读取历史 [MEMORY_UPDATE]，输出 spec 规定的开场白。
+
+    spec 说"仅限新会话的第一轮"，因此重复执行 stage0 会更新开场白但不重复计入 stages_done。
+    """
+    store = payload.get("store") or None
+    path = memory_store_path(store)
+    limit = int(payload.get("limit", 3))
+    memories = memory_recall(path, limit=limit)
+    opening = memory_intro(path, limit=limit)
+
+    state["stage0"] = {
+        "memory_loaded": memories,
+        "opening_line": opening,
+        "store": str(path),
+        "memory_count": len(memories),
+        "loaded_at": datetime.now().isoformat(timespec="seconds"),
+    }
+    if "stage0" not in state["stages_done"]:
+        state["stages_done"].append("stage0")
+    state["stage"] = "stage0_done"
+    return {"stage": "stage0", "ok": True, "opening_line": opening,
+            "memory_count": len(memories), "store": str(path),
+            "memories": [{"id": m.get("id"), "text": m.get("text"),
+                          "created_at": m.get("created_at")} for m in memories]}
+
+
+# --------------------------------------------------------------------------- #
 # 阶段一：摊牌与数据诉求
 # --------------------------------------------------------------------------- #
+
+
+def _parse_tool_calls(text: str) -> list:
+    return [{"kind": m.group(1).capitalize(), "detail": m.group(2).strip()}
+            for m in TOOL_CALL_RE.finditer(str(text))]
+
+
+def _check_tool_closure(role: str, text: str, tool: dict, problems: list) -> dict:
+    """V3 闭环要求：所有 [数据诉求] 必须有对应的 [Tool Call] 结果，不允许抛出问题就跑。"""
+    calls = _parse_tool_calls(text)
+    if not calls:
+        problems.append(f"{role} 缺少 [Tool Call: Search|Code] 标记：V3 要求数据诉求必须闭环")
+    if not STANCE_AFTER_RE.search(text):
+        problems.append(f"{role} 拿到工具结果后没有明确表态"
+                        f"（必须出现「基于此数据，我的观点是…」）")
+    return {"calls": calls, "closed": bool(calls) and bool(STANCE_AFTER_RE.search(text))}
 
 
 def run_stage1(state: dict, payload: dict) -> dict:
@@ -168,6 +224,9 @@ def run_stage1(state: dict, payload: dict) -> dict:
         results.append({"role": role, "source": source, "simulated": simulated,
                         "tool": tool.get("tool", ""), "query": tool.get("query", ""),
                         "result": tool.get("result", ""), "obtained_at": tool.get("obtained_at", "")})
+        closure = _check_tool_closure(role, text, tool, problems)
+        results[-1]["tool_calls"] = closure["calls"]
+        results[-1]["closure_ok"] = closure["closed"]
 
     missing = [r for r in SIX_ROLES if r not in seen]
     if missing:
@@ -186,6 +245,7 @@ def run_stage1(state: dict, payload: dict) -> dict:
             "data_demands": len(demands),
             "real_tool_calls": len([r for r in results if r["source"] == "tool"]),
             "simulated": len([r for r in results if r["simulated"]]),
+            "closure_ok": len([r for r in results if r.get("closure_ok")]),
             "demands": demands}
 
 
@@ -214,6 +274,7 @@ def run_stage2(state: dict, payload: dict) -> dict:
         problems.append("exchanges 为空：没有交锋就不算对抗")
 
     cleaned = []
+    verifications = []
     for i, e in enumerate(exchanges, 1):
         role = e.get("from")
         text = str(e.get("text", ""))
@@ -225,12 +286,33 @@ def run_stage2(state: dict, payload: dict) -> dict:
             it = INNER_THOUGHT_RE.search(text).group(1).strip()
         if not it:
             problems.append(f"第 {i} 条（{role}）缺少 (Inner Thought: ...)：阶段二每个角色发言前必须先输出内心戏")
+
+        # V3 · [打断并验真]：触发后必须给出验真结果，否则就是"打断完就跑"
+        verify = bool(e.get("verify")) or bool(VERIFY_INTERRUPT_RE.search(text))
+        v_result = e.get("verify_result") or {}
+        if verify:
+            calls = _parse_tool_calls(text)
+            if not calls and not v_result:
+                problems.append(
+                    f"第 {i} 条（{role}）使用了 [打断并验真]，但没有 [Tool Call] 也没有 verify_result："
+                    f"验真必须落地，不能只打断不查证")
+            verifications.append({
+                "from": role,
+                "target_claim": e.get("target_claim"),
+                "tool_calls": calls,
+                "result": v_result.get("result", ""),
+                "source": v_result.get("source", "tool" if calls else ""),
+                "simulated": bool(v_result.get("simulated")),
+                "verdict": v_result.get("verdict", "inconclusive"),
+            })
+
         cleaned.append({
             "from": role,
             "round": 2,
             "camp": "blue" if role in blue else ("red" if role in red else None),
             "inner_thought": it,
             "interrupt": bool(e.get("interrupt")) or bool(INTERRUPT_RE.search(text)),
+            "verify": verify,
             "target_claim": e.get("target_claim"),
             "text": text,
             "evidence": e.get("evidence", ""),
@@ -241,7 +323,8 @@ def run_stage2(state: dict, payload: dict) -> dict:
 
     state["camps"] = {"blue": blue, "red": red}
     state["clash_exchanges"] = cleaned
-    state["stage2"] = {"exchanges": cleaned, "camps": state["camps"], "spark": None}
+    state["stage2"] = {"exchanges": cleaned, "camps": state["camps"], "spark": None,
+                       "verifications": verifications}
 
     sp = spark(state, 2)
     state["stage2"]["spark"] = sp
@@ -260,6 +343,7 @@ def run_stage2(state: dict, payload: dict) -> dict:
     return {"stage": "stage2", "ok": True, "verdict": "sparked",
             "blue": blue, "red": red,
             "interrupts": len([e for e in cleaned if e["interrupt"]]),
+            "verifications": len(verifications),
             "spark": sp}
 
 
@@ -303,6 +387,24 @@ def run_stage3(state: dict, payload: dict) -> dict:
         if not s.get("statement"):
             problems.append(f"召唤 {s.get('role')} 缺少 statement（该角色说了什么）")
 
+    # V3 · 现实沙盘：必须引入真实工具（代码执行/搜索）验证至少一条假设
+    sandbox_tools = sandbox.get("tool_calls") or payload.get("tool_calls") or []
+    if not sandbox_tools:
+        problems.append(
+            "沙盘缺少 tool_calls：V3 要求沙盘阶段必须用外部工具（代码执行/搜索）验证假设，"
+            "不能只靠嘴说")
+    for i, tc in enumerate(sandbox_tools, 1):
+        if tc.get("kind") not in TOOL_KINDS:
+            problems.append(f"第 {i} 个 tool_call 的 kind={tc.get('kind')!r} 不在 {TOOL_KINDS} 内")
+        if not tc.get("purpose"):
+            problems.append(f"第 {i} 个 tool_call 缺少 purpose（要验证哪条假设）")
+        if not tc.get("result"):
+            problems.append(f"第 {i} 个 tool_call 缺少 result（验证结果不能为空）")
+        if tc.get("kind") == "Code" and not tc.get("code"):
+            problems.append(f"第 {i} 个 Code 调用缺少 code 字段")
+        if tc.get("source") != "tool" and not tc.get("simulated"):
+            problems.append(f"第 {i} 个 tool_call 既非真实调用（source=tool）也未标 simulated=true")
+
     if problems:
         die("阶段三校验失败：\n  - " + "\n  - ".join(problems), 3)
 
@@ -320,7 +422,7 @@ def run_stage3(state: dict, payload: dict) -> dict:
         "plan": sandbox.get("action_plan") or {},
     })
 
-    state["sandbox"] = {**sandbox, "evaluation": surv}
+    state["sandbox"] = {**sandbox, "tool_calls": sandbox_tools, "evaluation": surv}
     state["stage3"] = {"sandbox": state["sandbox"], "summons": summons}
     if summons:
         state.setdefault("summoned_roles", []).extend(summons)
@@ -329,6 +431,7 @@ def run_stage3(state: dict, payload: dict) -> dict:
     state["stage"] = "stage3_done"
     return {"stage": "stage3", "ok": True, "plan": plan_name,
             "timeline_months": len(timeline),
+            "tool_calls": len(sandbox_tools),
             "summoned": [s.get("role") for s in summons],
             "survival": surv}
 
@@ -362,12 +465,29 @@ def run_stage4(state: dict, payload: dict) -> dict:
     if problems:
         die("阶段四校验失败：\n  - " + "\n  - ".join(problems), 3)
 
-    state["stage4"] = {"meta": meta, "memory": memory}
+    # V3 · 记忆沉淀：写入跨会话记忆库（可用 --no-persist 关闭，仅测试用）
+    persist = payload.get("persist_memory", True)
+    written = None
+    if persist:
+        store = payload.get("store") or None
+        written = memory_remember(
+            memory_store_path(store), memory,
+            tags=meta.get("memory_tags") or ["终极圆桌"],
+            session=state.get("session_id", ""),
+            topic=state.get("topic", ""),
+        )
+
+    state["stage4"] = {"meta": meta, "memory": memory,
+                       "memory_written": bool(written),
+                       "memory_entry": written}
     if "stage4" not in state["stages_done"]:
         state["stages_done"].append("stage4")
     state["stage"] = "stage4_done"
     return {"stage": "stage4", "ok": True, "memory_chars": len(memory),
-            "shared_hidden_assumption": shared}
+            "shared_hidden_assumption": shared,
+            "memory_written": bool(written),
+            "memory_id": (written or {}).get("id"),
+            "memory_store": str(memory_store_path(payload.get("store") or None)) if written else ""}
 
 
 # --------------------------------------------------------------------------- #
@@ -400,11 +520,17 @@ def collect_report_data(state: dict) -> dict:
         "survival_band": surv.get("band"),
         "worst_risk": (surv.get("worst_risk") or {}).get("name", ""),
         "memory": state.get("stage4", {}).get("memory", ""),
+        "memory_written": state.get("stage4", {}).get("memory_written", False),
+        "memory_entry": state.get("stage4", {}).get("memory_entry"),
         "data_demands": s1.get("data_demands", []),
         "tool_results": s1.get("tool_results", []),
         "camps": s2.get("camps", {}),
+        "verifications": s2.get("verifications", []),
         "summons": state.get("stage3", {}).get("summons", []),
+        "sandbox_tools": sb.get("tool_calls", []),
         "spark": s2.get("spark") or {},
+        "memory_loaded": state.get("stage0", {}).get("memory_loaded", []),
+        "opening_line": state.get("stage0", {}).get("opening_line", ""),
     }
 
 
@@ -421,10 +547,13 @@ def _bullets(items, empty="（未提供）"):
 
 
 def render_report(state: dict) -> str:
+    """V3.0 冻结报告格式（五节，与 spec 逐字对应）。
+
+    注意 V3 相对 V2 的变化：
+      * 第 1 节从「核心共识与分歧底牌」换成「本次会议引入的外部数据 / 工具结果」；
+      * 共识与分歧移入报告末尾的「过程留痕」，不再占据正文五节之一。
+    """
     d = collect_report_data(state)
-    missing = [k for k in ("consensus", "core_divergence") if not d[k]]
-    if missing:
-        die(f"报告缺少必填内容：{missing}（不接受占位式报告）", 3)
     if not d["do"] or not d["dont"] or not d["need_info"]:
         die("行动指令三栏（Do / Don't / Need Info）必须都非空：拒绝和稀泥", 3)
     if d["survival_rate"] is None:
@@ -434,41 +563,90 @@ def render_report(state: dict) -> str:
 
     sim_count = len([t for t in d["tool_results"] if t.get("simulated")])
     real_count = len([t for t in d["tool_results"] if t.get("source") == "tool"])
+    sandbox_real = len([t for t in d["sandbox_tools"]
+                        if t.get("source") == "tool"])
+    sandbox_sim = len([t for t in d["sandbox_tools"]
+                       if t.get("simulated")])
 
     L = []
-    L.append("### 📊 终极圆桌决策报告")
+    L.append("### 📊 终极圆桌决策报告 V3.0")
     L.append("")
-    L.append(f"> 议题：{d['topic']}　会话：`{d['session_id']}`　"
-             f"数据来源：真实工具调用 {real_count} 条 / 模拟数据 {sim_count} 条")
+    L.append(f"> 议题：{d['topic']}　会话：`{d['session_id']}`")
+    L.append(f"> 数据来源：阶段一 真实工具调用 {real_count} 条 / 模拟 {sim_count} 条；"
+             f"沙盘 真实 {sandbox_real} 条 / 模拟 {sandbox_sim} 条")
+    if d["opening_line"]:
+        L.append(f"> {d['opening_line']}")
     L.append("")
-    L.append("#### 1. 核心共识与分歧底牌")
-    L.append(f"- **共识**：{d['consensus']}")
-    L.append(f"- **核心分歧（未被完全解决）**：{d['core_divergence']}")
+
+    # ---- 1. 外部数据 / 工具结果 ----
+    L.append("#### 🔗 1. 本次会议引入的外部数据 / 工具结果")
+    if not d["tool_results"] and not d["sandbox_tools"]:
+        L.append("- （本次未引入任何外部数据：按 V3 纪律，这样的会议不应产出决策报告）")
+    for i, t in enumerate(d["tool_results"], 1):
+        kind = "真实工具" if t.get("source") == "tool" else "模拟"
+        calls = t.get("tool_calls") or []
+        call_desc = "；".join(f"[{c['kind']}] {c['detail']}" for c in calls) or "未标注 Tool Call"
+        L.append(f"- 数据 {i}（{t.get('role')}，来源：{kind}{'·' + t.get('tool', '') if t.get('tool') else ''}）："
+                 f"{t.get('query', '') or '—'}")
+        L.append(f"  - 调用：{call_desc}")
+        L.append(f"  - 结果：{str(t.get('result', ''))[:160]}")
+    for i, t in enumerate(d["sandbox_tools"], 1):
+        kind = "真实" if t.get("source") == "tool" else "模拟"
+        L.append(f"- 沙盘工具 {i}（{kind}{'·' + t['kind'] if t.get('kind') else ''}）："
+                 f"{t.get('purpose', '')}")
+        if t.get("code"):
+            L.append("  ```python")
+            for line in str(t["code"]).splitlines():
+                L.append(f"  {line}")
+            L.append("  ```")
+        L.append(f"  - 运行结果：{str(t.get('result', ''))[:200]}")
+    if d["verifications"]:
+        L.append("")
+        L.append(f"- **打断并验真 {len(d['verifications'])} 次**：")
+        for v in d["verifications"]:
+            L.append(f"  - {v.get('from')} 对 {v.get('target_claim') or '（未指定靶点）'} 验真 → "
+                     f"{v.get('verdict')}：{str(v.get('result', ''))[:120]}")
     L.append("")
-    L.append("#### 2. 击穿的隐性假设（元认知发现）")
+
+    # ---- 2. 隐性假设 ----
+    L.append("#### 🧠 2. 击穿的隐性假设（元认知发现）")
     if d["shared_hidden_assumption"]:
         L.append(f"- 全程共同的隐性假设：**{d['shared_hidden_assumption']}**")
     for item in d["assumption_broken"]:
-        L.append(f"- 我们一开始默认了 {item}，但沙盘推演证明这是错的。")
+        L.append(f"- 我们一开始默认了 {item}，但外部数据证明这是错的。")
     if d["ignored_dimension"]:
         L.append(f"- 我们忽略了 {d['ignored_dimension']} 维度的成本。")
     L.append("")
-    L.append("#### 3. 行动指令 (Action Items)")
+
+    # ---- 3. 行动指令 ----
+    L.append("#### 🎯 3. 行动指令 (Action Items)")
     L.append(f"- ✅ **Do（立刻执行）**：{'；'.join(d['do'])}")
     L.append(f"- ❌ **Don't（绝对禁区）**：{'；'.join(d['dont'])}")
     L.append(f"- 🔍 **Need Info（需要补充调研）**：{'；'.join(d['need_info'])}")
     L.append("")
-    L.append("#### 4. 沙盘推演存活率评估")
-    L.append(f"- 当前方案的预估存活率：{d['survival_rate']}%（满分100%）")
+
+    # ---- 4. 存活率 ----
+    L.append("#### 🛡️ 4. 沙盘存活率评估")
+    L.append(f"- 当前方案预估存活率：{d['survival_rate']}%")
     L.append(f"- 最致命的潜在风险点：{d['worst_risk'] or '（未登记风险，这本身就是最大风险）'}")
     L.append("")
-    L.append("#### 5. 长期记忆写入")
+
+    # ---- 5. 长期记忆 ----
+    L.append("#### 🧠 5. 长期记忆写入")
     L.append(f"- `[MEMORY_UPDATE]`：{d['memory']}")
+    if d["memory_written"]:
+        entry = d["memory_entry"] or {}
+        L.append(f"  - 已写入记忆库：`{entry.get('id', '')}`（{entry.get('chars', 0)} 字）")
+    else:
+        L.append("  - ⚠ 未写入记忆库（本次以 persist_memory=false 运行，仅用于测试）")
     L.append("")
     L.append("---")
     L.append("")
     L.append("**过程留痕（不属于报告正文）**")
     L.append("")
+    if d["consensus"] or d["core_divergence"]:
+        L.append(f"- 共识：{d['consensus'] or '（未提供）'}")
+        L.append(f"- 核心分歧：{d['core_divergence'] or '（未提供）'}")
     L.append(f"- 阶段一数据诉求 {len(d['data_demands'])} 条：")
     L.extend([f"  - [{x['role']}] {x['demand']}" for x in d["data_demands"]])
     camps = d["camps"]
@@ -481,6 +659,7 @@ def render_report(state: dict) -> str:
         L.append(f"- 动态召唤：{', '.join(s.get('role', '') for s in d['summons'])}")
     else:
         L.append("- 动态召唤：本轮无（未出现跨领域认知盲区）")
+    L.append(f"- 历史记忆加载：{len(d['memory_loaded'])} 条")
 
     md = "\n".join(L)
     bad = [p for p in FORBIDDEN_PHRASES if p in md]
@@ -556,14 +735,14 @@ def cmd_init(args) -> int:
     save_state(path, st)
     log(f"已创建终极圆桌状态：{path}")
     emit({"state_path": str(path), "session_id": st["session_id"],
-          "roles": st["roles"], "next": "stage1"})
+          "roles": st["roles"], "next": "stage0"})
     return 0
 
 
 def cmd_stage(args) -> int:
     st = load_state(args.state)
     payload = read_payload(args)
-    fn = {"stage1": run_stage1, "stage2": run_stage2,
+    fn = {"stage0": run_stage0, "stage1": run_stage1, "stage2": run_stage2,
           "stage3": run_stage3, "stage4": run_stage4}[args.cmd]
     result = fn(st, payload)
     if args.write:
@@ -618,7 +797,9 @@ def selftest() -> int:
                     else {"source": "text", "simulated": True, "tool": "simulated_search",
                           "query": "示例查询", "result": "模拟返回"})
             conf.append({"role": role,
-                         "text": f"我的结论依赖一项关键数据。[数据诉求: 需要示例指标{i}]",
+                         "text": f"我的结论依赖一项关键数据。[数据诉求: 需要示例指标{i}] "
+                                 f"[Tool Call: Search] 关键词：示例指标{i}。"
+                                 f"基于此数据，我的观点是：示例结论 {i}。",
                          "tool_result": tool})
         return {"confessions": conf}
 
@@ -635,7 +816,13 @@ def selftest() -> int:
                  "text": "这套方案多出两个审批环节，砍掉之后成本降 30%", "evidence": "减法清单"},
                 {"from": "pg", "target_claim": "M1-1",
                  "inner_thought": "我只有一个案例，但我必须用它顶住",
-                 "text": "按获奖概率分配已经在两个团队上失效，这是可核实的", "evidence": "示例案例"},
+                 "text": "[打断并验真] 你说按获奖概率分配有效，我要现场查证。"
+                         "[Tool Call: Search] 关键词：按获奖概率分配 失效案例。"
+                         "基于此数据，我的观点是：该做法在两个团队上已失效。",
+                 "evidence": "示例案例",
+                 "verify": True,
+                 "verify_result": {"result": "模拟检索：2 个案例显示失效", "source": "text",
+                                   "simulated": True, "verdict": "supported"}},
                 {"from": "musk", "target_claim": "P2-1",
                  "inner_thought": "包装成本量级太小，不值得改结论",
                  "text": "接受包装成本，但它只占 3%，不改变下界结论", "evidence": "量级估算"},
@@ -675,6 +862,12 @@ def selftest() -> int:
                                 "need_info": ["包装成本占真实比例"]},
                 "consensus": "现行分配规则本身在制造额外成本",
                 "core_divergence": "成功标准是否必须等于获奖（价值分歧，未解决）",
+                "tool_calls": [
+                    {"kind": "Code", "source": "tool",
+                     "purpose": "验证包装成本占比是否会让结论反转",
+                     "code": "rate = 0.12\nprint('包装成本占比', rate, '→ 结论反转' if rate > 0.15 else '→ 结论不变')",
+                     "result": "包装成本占比 0.12 → 结论不变"},
+                ],
             },
             "summons": [{"role": "法务专家", "reason": "评审口径变更涉及评奖规则与合规",
                          "statement": "改口径需要同步修改评奖细则，否则评奖结果可被申诉"}],
@@ -689,12 +882,24 @@ def selftest() -> int:
                       "先定义成功标准再谈资源分配，是这类议题唯一的前置动作。",
             "consensus": "现行规则在制造额外成本",
             "core_divergence": "成功标准是否必须等于获奖（价值分歧，未解决）",
-        }}
+        }, "persist_memory": False}
 
     with tempfile.TemporaryDirectory() as td:
         sp = Path(td) / "state.json"
         st = new_state("【自检】终极圆桌")
         save_state(sp, st)
+
+        # 阶段零：记忆唤醒（用临时记忆库，不污染真实仓库）
+        mem = Path(td) / "mem.jsonl"
+        r0 = run_stage0(st, {"store": str(mem)})
+        ck(r0["ok"] and r0["memory_count"] == 0, "空记忆库时阶段零正常执行")
+        ck("无记忆记录" in r0["opening_line"], "无历史时开场白明确说明")
+        from memory_store import remember as _remember
+        _remember(mem, "评审类流程的优化对象不是频次而是单次固定开销", tags=["评审"])
+        r0b = run_stage0(st, {"store": str(mem)})
+        ck(r0b["memory_count"] == 1 and "单次固定开销" in r0b["opening_line"],
+           "有历史记忆时被读入开场白")
+        ck(st["stages_done"].count("stage0") == 1, "重复执行阶段零不重复登记")
 
         # 阶段顺序强制
         try:
@@ -782,7 +987,27 @@ def selftest() -> int:
         r3 = run_stage3(st, stage3_payload())
         ck(r3["ok"] and r3["timeline_months"] == 3, "沙盘三节点通过")
         ck(r3["summoned"] == ["法务专家"], "动态召唤被记录")
+        ck(r3["tool_calls"] == 1, "沙盘工具调用被记录")
         ck(0 <= r3["survival"]["survival_rate"] <= 100, "存活率在 0-100 区间")
+
+        # V3：沙盘没有工具调用必须被拒绝
+        no_tool = stage3_payload()
+        no_tool["sandbox"].pop("tool_calls")
+        try:
+            run_stage3(st, no_tool)
+            ck(False, "沙盘缺工具调用应被拒绝")
+        except SystemExit:
+            ck(True, "沙盘缺 tool_calls 被拒绝（V3 现实沙盘要求）")
+
+        # V3：[打断并验真] 只打断不查证必须被拒绝
+        no_verify = stage2_payload()
+        no_verify["exchanges"][2].pop("verify_result")
+        no_verify["exchanges"][2]["text"] = "[打断并验真] 你说按获奖概率分配有效。"
+        try:
+            run_stage2(st, no_verify)
+            ck(False, "验真无结果应被拒绝")
+        except SystemExit:
+            ck(True, "[打断并验真] 没有验真结果被拒绝")
 
         # 阶段四：记忆超长
         long_mem = stage4_payload()
@@ -795,13 +1020,28 @@ def selftest() -> int:
 
         r4 = run_stage4(st, stage4_payload())
         ck(r4["ok"] and r4["memory_chars"] <= MEMORY_LIMIT, "长期记忆在 200 字内")
+        ck(r4["memory_written"] is False, "persist_memory=false 时不写入记忆库")
 
-        # 报告
+        # V3：persist_memory=true 时必须真的写进记忆库
+        st2 = json.loads(json.dumps(st))
+        st2["stage4"] = {}
+        mem2 = Path(td) / "mem2.jsonl"
+        p4 = stage4_payload()
+        p4["persist_memory"] = True
+        p4["store"] = str(mem2)
+        r4b = run_stage4(st2, p4)
+        ck(r4b["memory_written"] is True and mem2.exists(), "persist_memory=true 时写入记忆库")
+        ck(len(mem2.read_text(encoding="utf-8").splitlines()) == 1, "记忆库中恰好一条新记忆")
+
+        # 报告（V3 五节）
         md = render_report(st)
-        for sec in ["### 📊 终极圆桌决策报告", "#### 1. 核心共识与分歧底牌",
-                    "#### 2. 击穿的隐性假设（元认知发现）", "#### 3. 行动指令 (Action Items)",
-                    "#### 4. 沙盘推演存活率评估", "#### 5. 长期记忆写入"]:
-            ck(sec in md, f"报告含章节 {sec}")
+        for sec in ["### 📊 终极圆桌决策报告 V3.0",
+                    "#### 🔗 1. 本次会议引入的外部数据 / 工具结果",
+                    "#### 🧠 2. 击穿的隐性假设（元认知发现）",
+                    "#### 🎯 3. 行动指令 (Action Items)",
+                    "#### 🛡️ 4. 沙盘存活率评估",
+                    "#### 🧠 5. 长期记忆写入"]:
+            ck(sec in md, f"报告含 V3 章节 {sec}")
         ck("✅ **Do（立刻执行）**" in md and "❌ **Don't（绝对禁区）**" in md
            and "🔍 **Need Info（需要补充调研）**" in md, "三栏行动指令齐备")
         ck("[MEMORY_UPDATE]" in md, "包含 MEMORY_UPDATE")
@@ -820,7 +1060,7 @@ def selftest() -> int:
         # check
         c = check(st)
         ck(c["ready_to_report"] is True and c["verdict"] == "ready", "完整状态判定为可交付")
-        ck(c["stages_done"] == STAGES, "四个阶段全部记录")
+        ck(c["stages_done"] == STAGES, "五个阶段全部记录")
 
         half = new_state("半成品")
         c2 = check(half)
@@ -829,7 +1069,8 @@ def selftest() -> int:
         # 端到端 CLI（含 --write 落盘）
         cli_state = Path(td) / "cli.json"
         save_state(cli_state, new_state("CLI 自检"))
-        for name, payload in (("stage1", stage1_payload()), ("stage2", stage2_payload()),
+        for name, payload in (("stage0", {"store": str(Path(td) / "cli-mem.jsonl")}),
+                              ("stage1", stage1_payload()), ("stage2", stage2_payload()),
                               ("stage3", stage3_payload()), ("stage4", stage4_payload())):
             pf = Path(td) / f"{name}.json"
             pf.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")

@@ -59,30 +59,43 @@ def stage1_payload(measure: dict) -> dict:
         return {"source": "text", "simulated": True, "tool": "simulated_search",
                 "query": query, "result": result, "obtained_at": "2026-11-01"}
 
+    # V3：每条发言 = [数据诉求] + [Tool Call] + 表态句，三样缺一不可
     return {"confessions": [
         {"role": "musk",
          "text": "评审频率本身不是成本主项，真正的主项是每次评审的固定开销。"
-                 "[数据诉求: 需要过去两年每次评审的平均参与人时与直接成本]",
+                 "[数据诉求: 需要过去两年每次评审的平均参与人时与直接成本] "
+                 "[Tool Call: Code] 目的：统计本仓库文件数作为规模量级参考。"
+                 "基于此数据，我的观点是：频次不是主变量。",
          "tool_result": real_a},
         {"role": "feynman",
          "text": "如果说不清「季度评审」到底改了什么，这个议题根本无法检验。"
-                 "[数据诉求: 需要现行评审制度里被季度化影响的具体环节清单]",
+                 "[数据诉求: 需要现行评审制度里被季度化影响的具体环节清单] "
+                 "[Tool Call: Search] 关键词：季度评审 制度变更 环节。"
+                 "基于此数据，我的观点是：必须先列出受影响环节才能谈频次。",
          "tool_result": sim("季度评审 制度变更 环节", "（模拟）影响环节：材料准备、评审会、复议")},
         {"role": "munger",
          "text": "缩短周期会让短期指标挤掉长期投入，这是激励结构问题不是效率问题。"
-                 "[数据诉求: 需要考核周期与项目周期的错配记录]",
+                 "[数据诉求: 需要考核周期与项目周期的错配记录] "
+                 "[Tool Call: Search] 关键词：考核周期 项目周期 错配。"
+                 "基于此数据，我的观点是：频次改变会放大短周期激励的扭曲。",
          "tool_result": sim("考核周期 项目周期 错配", "（模拟）三个跨年度项目因短周期考核被削减预算")},
         {"role": "jobs",
          "text": "评审流程本身就是多余复杂度，先问要不要评审再问频次。"
-                 "[数据诉求: 需要过去一年因评审被拦下的项目数量]",
+                 "[数据诉求: 需要过去一年因评审被拦下的项目数量] "
+                 "[Tool Call: Search] 关键词：评审 拦截 项目数。"
+                 "基于此数据，我的观点是：复议环节应当先被砍掉。",
          "tool_result": sim("评审 拦截 项目数", "（模拟）拦下 4 个，其中 2 个事后被证明该拦")},
         {"role": "karpathy",
          "text": "频次与质量的权衡缺少可测量口径，现在换频次等于瞎调参数。"
-                 "[数据诉求: 需要评审结论与实际结果的对照数据]",
+                 "[数据诉求: 需要评审结论与实际结果的对照数据] "
+                 "[Tool Call: Code] 目的：统计本仓库总行数作为口径复杂度参考。"
+                 "基于此数据，我的观点是：先定口径再谈频次。",
          "tool_result": real_b},
         {"role": "pg",
          "text": "我见过的案例里，改频次成功的都同时改了评审内容。"
-                 "[数据诉求: 需要至少 3 个只改频次未改内容的对照案例]",
+                 "[数据诉求: 需要至少 3 个只改频次未改内容的对照案例] "
+                 "[Tool Call: Search] 关键词：只改频次 未改内容 案例。"
+                 "基于此数据，我的观点是：频次不是自变量。",
          "tool_result": sim("只改频次 未改内容 案例", "（模拟）2 个案例：改频次未改内容，半年后回到原状")},
     ]}
 
@@ -103,8 +116,13 @@ def stage2_payload() -> dict:
              "evidence": "减法清单：材料准备 / 评审会 / 复议"},
             {"from": "pg", "target_claim": "K1-1",
              "inner_thought": "我只有两个案例，说服力不够，但我必须把话说满一点试探反应。",
-             "text": "只改频次不改内容的两个案例都回到原状了，说明频次不是自变量。",
-             "evidence": "模拟对照案例 2 个"},
+             "text": "[打断并验真] 你说频次是自变量，我现场查证。"
+                     "[Tool Call: Search] 关键词：只改频次 未改内容 结果。"
+                     "基于此数据，我的观点是：只改频次的案例都回到原状。",
+             "evidence": "模拟对照案例 2 个",
+             "verify": True,
+             "verify_result": {"result": "（模拟）检索到 2 个案例：只改频次未改内容，半年后回到原状",
+                               "simulated": True, "verdict": "refuted"}},
             {"from": "musk", "target_claim": "G2-1",
              "inner_thought": "上下文切换成本我确实漏了，但量级可能不足以推翻结论，先给数。",
              "text": "接受上下文切换成本，但按模拟数据估算它占总成本 9%，"
@@ -165,6 +183,19 @@ def stage3_payload() -> dict:
             },
             "consensus": "评审的固定开销与上下文切换成本，比评审频次本身更影响结果",
             "core_divergence": "评审该不该存在（价值分歧：效率优先 vs 风险控制优先，逻辑无法消解）",
+            "tool_calls": [
+                {"kind": "Code", "source": "tool",
+                 "purpose": "验证「切换次数翻四倍」的累积成本是否足以推翻方案",
+                 "code": ("switch_per_quarter = 4\n"
+                          "extra = 0.09          # 单次切换成本占总成本 9%\n"
+                          "total = switch_per_quarter * extra\n"
+                          "print(f'累积切换成本占比 {total:.0%} → "
+                          "{'结论反转' if total > 0.25 else '结论不变'}')\n"),
+                 "result": "累积切换成本占比 36% → 结论反转"},
+                {"kind": "Search", "source": "text", "simulated": True,
+                 "purpose": "验证申诉通道取消后的合规风险是否有先例",
+                 "result": "（模拟）检索到 2 个先例：取消复议后申诉积压并触发合规审查"},
+            ],
         },
         "summons": [
             {"role": "合规与劳动关系专家",
@@ -175,8 +206,8 @@ def stage3_payload() -> dict:
     }
 
 
-def stage4_payload() -> dict:
-    return {"meta": {
+def stage4_payload(store: str | None = None) -> dict:
+    payload = {"meta": {
         "shared_hidden_assumption": "评审的价值等于它拦下了多少项目",
         "assumption_broken": ["评审频次是成本主项", "复议环节是纯冗余"],
         "ignored_dimension": "上下文切换成本与申诉合规成本",
@@ -185,7 +216,11 @@ def stage4_payload() -> dict:
         "memory": "评审类流程的优化对象不是频次而是单次固定开销与切换成本；"
                   "砍环节前先问它承担了什么风险，尤其是申诉与合规通道——"
                   "这类环节的缺失成本通常延后三个月才显现。",
-    }}
+        "memory_tags": ["评审", "流程", "成本"],
+    }, "persist_memory": True}
+    if store:
+        payload["store"] = store
+    return payload
 
 
 def main() -> int:
@@ -211,13 +246,23 @@ def main() -> int:
     print(f"（真实测量：本仓库 .md/.py 共 {measure['file_count']} 个文件、"
           f"{measure['total_lines']} 行——这两条会以 source=tool 记入阶段一）")
 
-    print("\n=== 1. 阶段一：极速摊牌与工具诉求 ===")
+    # 记忆库放在演示目录内，避免污染仓库的真实记忆
+    store = str(out / "memories.jsonl")
+
+    print("\n=== 0b. 阶段零：记忆唤醒 ===")
+    p0 = work / "stage0.json"
+    p0.write_text(json.dumps({"store": store}, ensure_ascii=False), encoding="utf-8")
+    r0 = json.loads(run([py, orch, "stage0", "--state", state, "--file", str(p0), "--write"],
+                        args.quiet))
+    print(r0["opening_line"])
+
+    print("\n=== 1. 阶段一：极速摊牌与工具诉求（含 Tool Call 闭环） ===")
     p1 = work / "stage1.json"
     p1.write_text(json.dumps(stage1_payload(measure), ensure_ascii=False, indent=2),
                   encoding="utf-8")
     run([py, orch, "stage1", "--state", state, "--file", str(p1), "--write"], args.quiet)
 
-    print("\n=== 2. 阶段二：内心戏 + 打断 + 红蓝对抗 ===")
+    print("\n=== 2. 阶段二：内心戏 + 打断 + 红蓝对抗 + 交叉验真 ===")
     p2 = work / "stage2.json"
     p2.write_text(json.dumps(stage2_payload(), ensure_ascii=False, indent=2), encoding="utf-8")
     run([py, orch, "stage2", "--state", state, "--file", str(p2), "--write"], args.quiet)
@@ -240,28 +285,45 @@ def main() -> int:
         print(f"!! 预期退出码 4，实际 {proc.returncode}")
         return 1
 
-    print("\n=== 3. 阶段三：沙盘推演 + 动态召唤 ===")
+    print("\n=== 2c. 反例验证：数据诉求无 Tool Call 必须被拒绝 ===")
+    no_closure = stage1_payload(measure)
+    no_closure["confessions"][0]["text"] = "我的结论依赖数据。[数据诉求: 需要某个指标]"
+    pc = work / "stage1-no-closure.json"
+    pc.write_text(json.dumps(no_closure, ensure_ascii=False, indent=2), encoding="utf-8")
+    proc2 = subprocess.run([py, orch, "stage1", "--state", state, "--file", str(pc)],
+                           capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if proc2.returncode == 3:
+        print("缺 [Tool Call] 闭环被判为阶段一失败，退出码 3（符合预期）")
+    else:
+        print(f"!! 预期退出码 3，实际 {proc2.returncode}")
+        return 1
+
+    print("\n=== 3. 阶段三：终极沙盘 + 工具验证 + 动态召唤 ===")
     p3 = work / "stage3.json"
     p3.write_text(json.dumps(stage3_payload(), ensure_ascii=False, indent=2), encoding="utf-8")
     run([py, orch, "stage3", "--state", state, "--file", str(p3), "--write"], args.quiet)
     run([py, clash, "survival", "--state", state], args.quiet)
 
-    print("\n=== 4. 阶段四：元认知降维打击 ===")
+    print("\n=== 4. 阶段四：元认知降维打击 + 记忆沉淀 ===")
     p4 = work / "stage4.json"
-    p4.write_text(json.dumps(stage4_payload(), ensure_ascii=False, indent=2), encoding="utf-8")
+    p4.write_text(json.dumps(stage4_payload(store), ensure_ascii=False, indent=2),
+                  encoding="utf-8")
     run([py, orch, "stage4", "--state", state, "--file", str(p4), "--write"], args.quiet)
+    run([py, str(UR / "memory_store.py"), "stats", "--store", store], args.quiet)
 
     print("\n=== 5. 完整性检查 ===")
     run([py, orch, "check", "--state", state], args.quiet)
 
-    print("\n=== 6. 生成终极圆桌决策报告 ===")
+    print("\n=== 6. 生成终极圆桌决策报告 V3.0 ===")
     report = out / "ultimate-report.md"
     run([py, orch, "report", "--state", state, "--out", str(report)], args.quiet)
     print(report.read_text(encoding="utf-8"))
 
     print(f"\n演示完成。状态：{state}")
+    print(f"记忆库：{store}")
     print("注意：本演示的对话内容为虚构示例数据；"
-          "其中「文件数/行数」两条是真实本地测量，其余四条已标注 simulated=true。")
+          "其中「文件数/行数」两条与沙盘的 Code 调用是真实本地测量/可运行代码，"
+          "其余已标注 simulated=true。")
     return 0
 
 

@@ -3,7 +3,7 @@ name: cognitive-noise
 description: "轻量认知噪声层（默认关闭）：为圆桌角色注入三种可控的不完美——选择性注意（只看见部分历史并必须声明忽略了什么）、表达偏好（先说结论/先说顾虑/保守/冒险四档）、置信度传导（低置信度必须带保留语气，高置信度必须自陈可能错在哪）。当用户觉得讨论太干净太理性、要求模拟真人的表达质感与不确定性，或 roundtable-orchestrator 在 mode=simulation 下需要注入噪声时，必须使用本技能。仅在 simulation 模式下可用。"
 license: MIT
 metadata:
-  version: 1.2.0
+  version: 1.3.0
   layer: "Layer 5 · 认知噪声（可选）"
 ---
 

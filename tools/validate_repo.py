@@ -30,12 +30,12 @@ SKILLS = ROOT / "skills"
 
 CORE_SKILLS = ["roundtable-orchestrator", "meta-supervisor", "position-evolution",
                "decision-landscape", "cognitive-noise", "multi-model-adapter",
-               "ultimate-roundtable"]
+               "ultimate-roundtable", "host-bootstrap"]
 ROLE_SKILLS = ["role-musk", "role-feynman", "role-munger", "role-jobs", "role-karpathy", "role-pg"]
 ALL_SKILLS = CORE_SKILLS + ROLE_SKILLS
-EXPECTED_VERSION = "1.2.0"
-# 版本例外：ultimate-roundtable 按上游 spec 独立发版（v2.0.0），不参与统一版本对齐
-VERSION_OVERRIDES = {"ultimate-roundtable": "2.0.0"}
+EXPECTED_VERSION = "1.3.0"
+# 版本例外：这两个技能按上游 spec 独立发版，不参与统一版本对齐
+VERSION_OVERRIDES = {"ultimate-roundtable": "3.0.0", "host-bootstrap": "3.0.0"}
 
 # 不得出现在文档里的真实模型名（本包一律用占位符或 unspecified）
 FABRICATED_MODEL_RE = re.compile(
@@ -71,8 +71,11 @@ EXPECTED_FILES = {
     "multi-model-adapter": ["scripts/runtime_manifest.py",
                             "references/provider-assignment-guide.md"],
     "ultimate-roundtable": ["scripts/ultimate_orchestrator.py", "scripts/clash_analyzer.py",
+                            "scripts/memory_store.py",
                             "references/adversarial-tactics.md",
-                            "references/report-template.md"],
+                            "references/report-template.md",
+                            "references/tool-protocol.md"],
+    "host-bootstrap": ["scripts/bootstrap.py", "references/host-matrix.md"],
     "role-musk": ["references/first-principles-examples.md"],
     "role-feynman": ["references/explanation-verification.md"],
     "role-munger": ["references/mental-models-catalog.md"],
@@ -94,12 +97,15 @@ SCRIPTS = [
     "skills/multi-model-adapter/scripts/runtime_manifest.py",
     "skills/ultimate-roundtable/scripts/ultimate_orchestrator.py",
     "skills/ultimate-roundtable/scripts/clash_analyzer.py",
+    "skills/ultimate-roundtable/scripts/memory_store.py",
+    "skills/host-bootstrap/scripts/bootstrap.py",
 ]
 
 ROOT_FILES = [
     "README.md", "LICENSE", "CHANGELOG.md", ".gitignore",
+    "AGENTS.md", "CLAUDE.md",
     "docs/output-contract.md", "docs/example-session.md",
-    "tools/validate_repo.py", "tools/demo_session.py",
+    "tools/validate_repo.py", "tools/demo_session.py", "tools/demo_ultimate.py",
     "tools/run_evals.py", "tools/package_bundle.py", "evals/evals.json",
 ]
 
