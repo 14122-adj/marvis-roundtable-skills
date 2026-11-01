@@ -89,7 +89,9 @@ def main() -> int:
     descs = load_descriptions()
 
     results = []
-    tmp = tempfile.mkdtemp(prefix="mrs-evals-")
+    # 用 TemporaryDirectory 而不是 mkdtemp：退出时自动清理，避免临时目录泄漏
+    tmp_ctx = tempfile.TemporaryDirectory(prefix="mrs-evals-")
+    tmp = tmp_ctx.name
 
     for ev in spec["evals"]:
         eid = ev["id"]
@@ -153,6 +155,7 @@ def main() -> int:
         results.append({"id": eid, "type": kind, "ok": ok, "detail": detail})
 
     failed = [r for r in results if not r["ok"]]
+    tmp_ctx.cleanup()
     if args.json:
         print(json.dumps({"total": len(results), "failed": len(failed), "results": results},
                          ensure_ascii=False, indent=2))
